@@ -328,9 +328,11 @@ def _run_selftest():
     return True
 
 
-def main():
+def main(cfg=None):
+    """Runs one relaxation with `cfg` (default: config.CONFIG) and returns a
+    summary dict of the final state (used by tools/reference_run.py)."""
     import sys
-    cfg = CONFIG
+    cfg = CONFIG if cfg is None else cfg
     if cfg.selftest or "--selftest" in sys.argv:
         if not _run_selftest():
             sys.exit(1)
@@ -544,6 +546,7 @@ def main():
         )
         start_iter, verts, _, _, _, _ = last
         boundary_last = boundary_idx  # ring indices that belong to `last` (a remesh below renumbers)
+        tris_last = tris
 
         if remesh_kind == "diverged":
             break
@@ -804,6 +807,12 @@ def main():
         print(f"        Remeshed {epoch}x, final resolution: "
               f"{len(verts_final)} vertices, {len(tris)} triangles"
               + (f" ({len(tris) - n_base} dome + {n_base} base)" if n_base else ""))
+    return {"iteration": int(i), "energy": surface_free_energy(cfg, verts_final, tris_last, boundary_last, Af,
+                                                              last[4], last[5]),
+            "area": float(Af), "volume": float(Vf), "contact_radius": float(rf), "remeshes": int(epoch),
+            "verts": verts_final, "tris": tris_last, "boundary_idx": boundary_last,
+            "force": None if quasi is None or quasi.prev_F is None else quasi.prev_F.tolist(),
+            "quasi_frames": None if quasi is None else int(quasi.frames)}
 
 
 if __name__ == "__main__":

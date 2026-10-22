@@ -1,0 +1,13 @@
+{
+  "iteration": 6000,
+  "energy": 10091.678971860856,
+  "area": 10189.55255142461,
+  "volume": 125506.49319753503,
+  "contact_radius": 28.528750421212393,
+  "remeshes": 9,
+  "force": null,
+  "quasi_frames": null,
+  "n_verts": 794,
+  "n_tris": 1584,
+  "sha256": "30d80e8e6142fe32d079c9c0b454e861135f84635f9eb32bccadc1c0a2ebfbdb"
+}
