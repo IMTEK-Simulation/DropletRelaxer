@@ -42,6 +42,12 @@ class Series:
                                                          else (len(self),)) for k in self.KEYS}
 
 
+def series_from_file(rf):
+    """Series of a run file (io.reader.RunFile)."""
+    s = rf.series()
+    return Series(**{k: s[k] for k in Series.KEYS})
+
+
 def make_history_slider(scene, frames, series, save_dir=None):
     """Adds the slider widget -- call this once, after the relaxation has
     finished -- that scrubs through the recorded frames, so you can look at

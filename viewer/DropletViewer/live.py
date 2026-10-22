@@ -9,13 +9,14 @@ StopRequest; the driver then ends the run cleanly. Nothing else flows back
 into the numerics, so a run gives identical results with or without a window.
 """
 
+import signal
 import time
 
 from DropletRelaxer.console import format_duration
 from DropletRelaxer.io.frame import NullSink
 
 from .config import ViewerConfig
-from .history import Series, make_history_slider
+from .history import Series, make_history_slider, series_from_file
 from .scene import ProgressBar, Scene
 
 
@@ -28,11 +29,17 @@ def _progress_text(frac, elapsed, eta):
 class LiveWindow(NullSink):
     """Live PyVista window. After the run it stays open with the history
     slider, Play and Save (video into `save_dir`), unless it was closed or is
-    off screen."""
+    off screen.
 
-    def __init__(self, vcfg=None, save_dir=None, event_interval=0.1, progress_interval=1.0):
+    With `run_file` (the path an H5Writer earlier in the sink list writes),
+    the history slider replays that file after the run, exactly as
+    `droplet-view run.h5` does, and only the per-frame scalars are kept in
+    memory. Without it, the recorded frames are kept in memory."""
+
+    def __init__(self, vcfg=None, save_dir=None, run_file=None, event_interval=0.1, progress_interval=1.0):
         self.vcfg = vcfg if vcfg is not None else ViewerConfig()
         self.save_dir = save_dir
+        self.run_file = run_file
         self.event_interval, self.progress_interval = event_interval, progress_interval
         self.scene = None
         self.closed = False
@@ -42,7 +49,7 @@ class LiveWindow(NullSink):
     def start(self, run):
         self.run = run
         self.scene = scene = Scene(run, self.vcfg)
-        self.frames, self.series = [], Series.empty()
+        self.frames, self.series, self.n_frames = [], Series.empty(), 0
         self.t0 = self.t_events = self.t_progress = time.perf_counter()
         scene.open_window()
         self.bar = ProgressBar(scene.plotter)
@@ -57,7 +64,9 @@ class LiveWindow(NullSink):
     def frame(self, f):
         if self.closed:
             return
-        self.frames.append(f)
+        if self.run_file is None:
+            self.frames.append(f)
+        self.n_frames += 1
         self.series.append(f)
         self.scene.show_frame(f)
         self.scene.set_series(self.series.x, self.series.energy, self.series.force)
@@ -101,8 +110,16 @@ class LiveWindow(NullSink):
             # keep open, so close and release resources right away.
             plotter.close()
             return
-        if len(self.frames) > 1:
-            make_history_slider(self.scene, self.frames, self.series, save_dir=self.save_dir)
+        if self.n_frames > 1:
+            frames, series = self.frames, self.series
+            if self.run_file is not None:
+                from DropletRelaxer.io.reader import RunFile
+                self._rf = RunFile(self.run_file)      # replay from the file the writer just closed
+                frames, series = self._rf.frames(), series_from_file(self._rf)
+            make_history_slider(self.scene, frames, series, save_dir=self.save_dir)
+        # The run is over: Ctrl-C/SIGTERM no longer mean "stop the solver cleanly".
+        signal.signal(signal.SIGINT, signal.default_int_handler)
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)
         print("Relaxation finished. The window stays open -- "
               "rotate/zoom freely, close it (or press 'q') when done.")
         if self.vcfg.pan_with_right_button:

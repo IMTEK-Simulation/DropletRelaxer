@@ -63,3 +63,22 @@ def test_viewer_config_documented_and_strict():
     assert v.curvature_clim == (0.0, 2.0) and v.colormap == "viridis"
     with pytest.raises(ConfigError, match="did you mean"):
         from_table({"colormp": "x"})
+
+
+def test_droplet_view_live_off_screen_writes_and_replays(tmp_path):
+    import subprocess
+
+    from DropletRelaxer.config import dumps
+    from DropletRelaxer.io.reader import RunFile
+    cfg = short_cfg()
+    scen = tmp_path / "s.toml"
+    scen.write_text(dumps(cfg, viewer={"off_screen": True}))
+    out = tmp_path / "run.h5"
+    subprocess.run([sys.executable, "-m", "DropletViewer.cli", "live", str(scen), "-o", str(out)],
+                   check=True, capture_output=True)
+    with RunFile(str(out)) as rf:
+        assert rf.status == "finished" and len(rf) > 2
+    video = tmp_path / "run.mp4"
+    subprocess.run([sys.executable, "-m", "DropletViewer.cli", str(out), "--video", str(video)],
+                   check=True, capture_output=True)
+    assert video.stat().st_size > 0
