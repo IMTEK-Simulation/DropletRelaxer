@@ -11,15 +11,15 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
-from energy import (
+from .energy import (
     area_and_grad, volume_and_grad, build_laplacian, row_norm,
     substrate_wall_energy_and_grad, substrate_penetration_energy_and_grad,
 )
-from mesh import tangential_smooth_step
-from anomaly import anomaly_wall_energy_and_grad
-from substrate import base_triangle_mask, BaseEmbedder
-from obstacle import sphere_center_at, sphere_contact_energy_and_grad
-from wetting import (
+from .mesh import tangential_smooth_step
+from .anomaly import anomaly_wall_energy_and_grad
+from .substrate import base_triangle_mask, BaseEmbedder
+from .obstacle import sphere_center_at, sphere_contact_energy_and_grad
+from .wetting import (
     unique_edges, compute_wetted_set, wetted_boundary_loop, sphere_wetting_energy_and_grad,
 )
 

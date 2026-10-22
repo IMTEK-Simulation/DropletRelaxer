@@ -3,9 +3,10 @@ import numpy as np
 import pytest
 
 from conftest import fd_gradient, rel_err
-from energy import area_and_grad, volume_and_grad, substrate_wall_energy_and_grad, substrate_penetration_energy_and_grad
-from mesh import make_disk_cone
-from substrate import add_base_mesh, strip_base, base_triangle_mask
+from DropletRelaxer.energy import (area_and_grad, volume_and_grad, substrate_wall_energy_and_grad,
+                                   substrate_penetration_energy_and_grad)
+from DropletRelaxer.mesh import make_disk_cone
+from DropletRelaxer.substrate import add_base_mesh, strip_base, base_triangle_mask
 
 
 def _poly_area(xy):

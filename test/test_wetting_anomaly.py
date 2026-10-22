@@ -4,10 +4,10 @@ import pytest
 from types import SimpleNamespace
 
 from conftest import fd_gradient, rel_err
-from wetting import (patch_solid_angle, sphere_wetting_energy_and_grad, compute_wetted_set,
+from DropletRelaxer.wetting import (patch_solid_angle, sphere_wetting_energy_and_grad, compute_wetted_set,
                      wetted_boundary_loop)
-from obstacle import sphere_contact_energy_and_grad
-from anomaly import (s_profile, disc_integral_and_grad, anomaly_wall_energy_and_grad)
+from DropletRelaxer.obstacle import sphere_contact_energy_and_grad
+from DropletRelaxer.anomaly import (s_profile, disc_integral_and_grad, anomaly_wall_energy_and_grad)
 
 
 # ------------------------------------------------------------------ sphere
@@ -92,7 +92,6 @@ def test_wetted_set_and_boundary_loop_of_a_patch():
             tris.append([ring(i, j), ring(i + 1, j + 1), ring(i, j + 1)])
     v, t = np.array(pts), np.array(tris)
     # add a non-wetted tail so the patch has a boundary inside the mesh
-    far = np.array([[0.0, 0.0, R + 5.0]])
     c = np.zeros(3)
     mask = compute_wetted_set(v, t, c, R, 1e-6)
     assert mask.all()

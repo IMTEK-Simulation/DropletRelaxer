@@ -4,8 +4,8 @@ import math
 import numpy as np
 import pytest
 
-from config import RoughnessConfig
-from roughness import make_roughness_field
+from DropletRelaxer.config import RoughnessConfig
+from DropletRelaxer.roughness import make_roughness_field
 
 KAPPA0 = math.cos(math.radians(60.0))
 
@@ -129,8 +129,8 @@ def test_invalid_mode_and_cutoff():
 
 
 def test_surface_free_energy_contains_roughness_term():
-    import main as M
-    from tests.runhelpers import fresh_config, scaled_setup
+    import DropletRelaxer.analysis as M
+    from runhelpers import fresh_config, scaled_setup
     cfg = fresh_config(); cfg.anomaly.enabled = False
     verts, tris, b, mask = scaled_setup(cfg)[:4]
     A = 1.0
@@ -143,7 +143,7 @@ def test_surface_free_energy_contains_roughness_term():
 
 
 def test_solver_uses_roughness_term():
-    from tests.runhelpers import static_cfg, scaled_setup, run_solver
+    from runhelpers import static_cfg, scaled_setup, run_solver
     cfg = static_cfg(60.0)
     verts, tris, b, mask, V0 = scaled_setup(cfg)
     last0, _ = run_solver(cfg, verts, tris, b, mask, V0, 200)

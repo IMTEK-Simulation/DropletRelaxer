@@ -4,11 +4,10 @@ import copy
 
 import numpy as np
 
-import config as _config
-from energy import area_and_grad, volume_and_grad
-from mesh import make_start_mesh, build_dof_mask, resolve_volume_scale
-from solver import relax
-from substrate import base_triangle_mask
+import DropletRelaxer.config as _config
+from DropletRelaxer.energy import volume_and_grad
+from DropletRelaxer.mesh import make_start_mesh, build_dof_mask, resolve_volume_scale
+from DropletRelaxer.solver import relax
 
 
 def fresh_config():
@@ -64,8 +63,8 @@ def cap_prediction(V, theta_deg):
 def refine_global(verts, tris, bidx, mask_fn=build_dof_mask):
     """One global 1-to-4 subdivision of the dome, with the base rebuilt (what
     main.py does at a remesh)."""
-    from mesh import subdivide_mesh, tangential_smooth
-    from substrate import strip_base, add_base_mesh
+    from DropletRelaxer.mesh import subdivide_mesh, tangential_smooth
+    from DropletRelaxer.substrate import strip_base, add_base_mesh
     v, t, b = strip_base(verts, tris, bidx)
     v, t, b = subdivide_mesh(v, t, b)
     v = tangential_smooth(v, t, b)

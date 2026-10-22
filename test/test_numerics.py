@@ -3,10 +3,10 @@
 import numpy as np
 import pytest
 
-from energy import area_and_grad, volume_and_grad, build_laplacian
-from mesh import (make_disk_cone, subdivide_mesh, refine_rivara, collapse_short_edges,
+from DropletRelaxer.energy import area_and_grad, volume_and_grad, build_laplacian
+from DropletRelaxer.mesh import (make_disk_cone, subdivide_mesh, refine_rivara, collapse_short_edges,
                   tangential_smooth, max_edge_length, mean_edge_length)
-from wetting import unique_edges
+from DropletRelaxer.wetting import unique_edges
 
 
 def _dome(rng=None, n_rings=6, noise=0.0):
@@ -111,4 +111,5 @@ def test_tangential_smoothing_changes_neither_area_nor_volume_noticeably(rng):
     assert abs(V1 - V0) / V0 < 1e-2
     assert np.allclose(vs[b], vp[b])                                           # ring is fixed
     # the point of it: triangles become more uniform
-    assert np.std(np.linalg.norm(vs[t[:, 0]] - vs[t[:, 1]], axis=1)) <= np.std(np.linalg.norm(vp[t[:, 0]] - vp[t[:, 1]], axis=1))
+    assert (np.std(np.linalg.norm(vs[t[:, 0]] - vs[t[:, 1]], axis=1))
+            <= np.std(np.linalg.norm(vp[t[:, 0]] - vp[t[:, 1]], axis=1)))

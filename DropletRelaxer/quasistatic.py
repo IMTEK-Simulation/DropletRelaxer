@@ -28,7 +28,7 @@ import time
 
 import numpy as np
 
-from obstacle import path_length, sphere_center_at
+from .obstacle import path_length, sphere_center_at
 
 
 class QuasiStatic:

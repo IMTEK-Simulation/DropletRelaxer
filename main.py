@@ -18,66 +18,29 @@ import time
 
 import numpy as np
 
-from config import CONFIG
-from mesh import (
+from DropletRelaxer.config import CONFIG
+from DropletRelaxer.mesh import (
     make_start_mesh, resolve_volume_scale, build_dof_mask, subdivide_mesh, collapse_short_edges,
     mean_edge_length, max_edge_length, short_edge_fraction, tangential_smooth,
     refine_rivara, long_edges_near, short_edges_near,
 )
-from energy import area_and_grad, volume_and_grad
-from solver import relax, SolverDiverged
-from quasistatic import QuasiStatic
-from obstacle import sphere_center_at
+from DropletRelaxer.energy import area_and_grad, volume_and_grad
+from DropletRelaxer.solver import relax, SolverDiverged
+from DropletRelaxer.quasistatic import QuasiStatic
+from DropletRelaxer.obstacle import sphere_center_at
 from visualize import make_anomaly_disc, make_roughness_surface
 from visualize import (
     make_plotter, update_mesh, replace_mesh, make_energy_chart, update_energy_chart,
     make_obstacle_mesh, update_obstacle_mesh, make_substrate_mesh, enable_right_button_pan,
     make_history_slider, update_wetting_outline, ProgressBar, update_volume_text, update_ring_outline,
 )
-from substrate import base_triangle_mask, add_base_mesh, strip_base
-from energy import cross3, row_norm
-from wetting import patch_solid_angle, compute_wetted_set, wetted_boundary_loop
-from energy import center_of_mass, mean_curvature
+from DropletRelaxer.substrate import base_triangle_mask, add_base_mesh, strip_base
+from DropletRelaxer.wetting import compute_wetted_set, wetted_boundary_loop
+from DropletRelaxer.energy import center_of_mass, mean_curvature
 from visualize import update_com_text, _capillary_force, set_gap_offset
 import export
-from anomaly import anomaly_wall_energy_and_grad
-from roughness import make_roughness_field
-
-
-def surface_free_energy(cfg, verts, tris, boundary_idx, A_lv, sphere_center=None, wetted_loop=None):
-    """Total interface energy of the closed droplet,
-
-        E = gamma_lv*A_lv - cos(theta)*gamma_lv*A_sl  [ - cos(theta_s)*gamma_lv*A_sphere ],
-
-    A_lv = liquid/vapor area (`A_lv`, as yielded by the solver: dome
-    without the sphere-wetted facets), A_sl = area of the flat base on the
-    substrate, A_sphere = R^2 * solid angle of the wetted patch on the
-    sphere (only when the sphere is in contact; it vanishes for the default
-    sphere angle of 90 deg). Evaluated from the yielded state only, so it is
-    exactly the energy the solver's gradient belongs to."""
-    g = cfg.solver.gamma_lv
-    E = g * A_lv
-    kappa = np.cos(np.radians(cfg.solver.contact_angle_deg))
-    if abs(kappa) > 1e-12:
-        bt = base_triangle_mask(verts, tris, boundary_idx)
-        if bt.any():
-            t = tris[bt]
-            # signed (normal down): the shoelace area even for a folded base
-            A_sl = -0.5 * cross3(verts[t[:, 1]] - verts[t[:, 0]],
-                                 verts[t[:, 2]] - verts[t[:, 0]])[:, 2].sum()
-            E -= kappa * g * A_sl
-    if getattr(cfg, "anomaly", None) is not None and cfg.anomaly.enabled:
-        E += anomaly_wall_energy_and_grad(verts, boundary_idx, cfg.anomaly, g, kappa)[0]
-    if getattr(cfg, "roughness_field", None) is not None:
-        E += cfg.roughness_field.energy_and_grad(verts, boundary_idx, g)[0]
-    if (wetted_loop is not None and sphere_center is not None
-            and cfg.obstacle.wetting_enabled):
-        ks = np.cos(np.radians(cfg.obstacle.wetting_contact_angle_deg))
-        if abs(ks) > 1e-12:
-            u = verts[wetted_loop] - sphere_center
-            u = u / np.linalg.norm(u, axis=1, keepdims=True)
-            E -= ks * g * cfg.obstacle.radius ** 2 * patch_solid_angle(u)
-    return float(E)
+from DropletRelaxer.roughness import make_roughness_field
+from DropletRelaxer.analysis import surface_free_energy
 
 
 class _Progress:
@@ -307,35 +270,10 @@ def _run_until_remesh_or_done(cfg, verts, tris, boundary_idx, mask, start_iter, 
     return last, None
 
 
-def _run_selftest():
-    """Runs the fast test suite (tests/, marker `fast`); returns True if all passed."""
-    import os
-    import subprocess
-    import sys
-    here = os.path.dirname(os.path.abspath(__file__))
-    try:
-        import pytest  # noqa: F401
-    except ImportError:
-        print("Self-test requested but pytest is not installed (pip install pytest).")
-        return False
-    print("Running the fast self-test (pytest -m fast) ...")
-    r = subprocess.run([sys.executable, "-m", "pytest", "-m", "fast", "-q", "-p", "no:cacheprovider", here],
-                       cwd=here)
-    if r.returncode != 0:
-        print("Self-test FAILED -- the simulation is not started.")
-        return False
-    print("Self-test passed.")
-    return True
-
-
 def main(cfg=None):
     """Runs one relaxation with `cfg` (default: config.CONFIG) and returns a
     summary dict of the final state (used by tools/reference_run.py)."""
-    import sys
     cfg = CONFIG if cfg is None else cfg
-    if cfg.selftest or "--selftest" in sys.argv:
-        if not _run_selftest():
-            sys.exit(1)
 
     mesh_scale = resolve_volume_scale(cfg.mesh)
     if mesh_scale != 1.0:
@@ -702,7 +640,7 @@ def main(cfg=None):
     elapsed = time.perf_counter() - t0
     if end_only and live_ctx is not None and live_ctx.get("progress") is not None:
         live_ctx["progress"].update(last[0], epoch, force=True,
-                                    frac=(1.0 if quasi is not None and quasi.finished else None) if quasi is not None else None,
+                                    frac=(1.0 if quasi.finished else None) if quasi is not None else None,
                                     eta=0.0 if quasi is not None else None)
         print()  # end of the progress line
     if quasi is not None:
@@ -750,7 +688,7 @@ def main(cfg=None):
         else:
             def _save_callback(record_video=None):
                 import os
-                import config as _config_module
+                import DropletRelaxer.config as _config_module
                 name = time.strftime("droplet_run_%Y%m%d_%H%M%S")
                 path = export.ask_save_path(name)
                 if not path:

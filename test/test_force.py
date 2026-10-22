@@ -8,9 +8,9 @@ iterations each). Measured agreement: 0.04 % (wetting angle 90 deg), 4-6 %
 import numpy as np
 import pytest
 
-import main as M
+import DropletRelaxer.analysis as M
 from runhelpers import static_cfg, scaled_setup, refine_global
-from solver import relax
+from DropletRelaxer.solver import relax
 
 pytestmark = pytest.mark.slow
 

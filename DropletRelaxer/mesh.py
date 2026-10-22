@@ -5,8 +5,8 @@ circle at z=0), built as a refined hemisphere triangulation.
 
 import numpy as np
 
-from energy import cross3, row_norm, scatter_add_rows
-from wetting import unique_edges
+from .energy import cross3, row_norm, scatter_add_rows
+from .wetting import unique_edges
 
 
 def make_hemisphere(n_theta, n_phi, radius):
@@ -121,7 +121,7 @@ def resolve_volume_scale(mesh_cfg):
     if not getattr(mesh_cfg, "target_volume", None):
         return 1.0
     verts, tris, _ = _build_shape(mesh_cfg)
-    from energy import volume_and_grad  # local import: avoids a mesh<->energy import cycle
+    from .energy import volume_and_grad  # local import: avoids a mesh<->energy import cycle
     v_now = volume_and_grad(verts, tris)[0]
     return (mesh_cfg.target_volume / v_now) ** (1.0 / 3.0)
 
@@ -138,7 +138,7 @@ def make_start_mesh(mesh_cfg):
         # Close the fluid with a flat base mesh on the substrate (see
         # substrate.py). Its volume contribution is exactly zero (all its
         # vertices have z = 0), so V and the dome's dynamics are unchanged.
-        from substrate import add_base_mesh
+        from .substrate import add_base_mesh
         verts, tris, boundary_idx = add_base_mesh(verts, tris, boundary_idx)
     return verts, tris, boundary_idx
 

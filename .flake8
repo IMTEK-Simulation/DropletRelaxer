@@ -1,0 +1,7 @@
+[flake8]
+max-line-length = 120
+# Continuation-line alignment (E127/E128), short names like `l` (E741),
+# `a; b` (E702) and lambda assignment (E731) are used deliberately in the
+# numerical code.
+extend-ignore = E127, E128, E741, E702, E731
+exclude = venv, .venv, build, dist, docs/_book

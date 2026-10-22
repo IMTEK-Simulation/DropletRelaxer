@@ -225,6 +225,12 @@ House style, as observed:
 - **NuMPI** is pure Python, built with `hatchling` + `hatch-vcs` (version from git tags into `_version.py`). It has a top-level package directory, `test/`, flake8 via pre-commit, and GitHub workflows `tests.yml`, `flake8.yml`, `publish.yml`.
 - **muGrid** is C++ with Python bindings, built with `scikit-build-core` + CMake + `setuptools-scm`. It has `MUGRID_ENABLE_CUDA` / `MUGRID_ENABLE_HIP` CMake options, C++ in `src/`, Python in `language_bindings/python/`, and docs built in a separate `documentation.yml` workflow.
 
+(Implementation note: the package is flat. The solver modules import each
+other across the `geometry/` / `energies/` / `optimizer/` split proposed
+earlier (mesh → energy/wetting, energy → substrate, substrate → wetting), so
+subpackages would only add cross-package cycles. The module names stay as
+they were, which also keeps the code references in README and docs valid.)
+
 Recommendation: **start in NuMPI style (pure Python, hatchling + hatch-vcs),
 and keep `src/` free for a future muGrid-style C++/CUDA/HIP library**. One
 repository, two distributions:
@@ -242,9 +248,9 @@ DropletRelaxer/
 ├── DropletRelaxer/                # solver package: no VTK/PyVista import anywhere
 │   ├── __init__.py  _version.py (generated)
 │   ├── config.py                  # dataclasses + load/dump TOML; no VisConfig
-│   ├── geometry/                  # start mesh, remeshing (split/collapse/Rivara), smoothing, substrate base
-│   ├── energies/                  # area/volume, wall, anomaly, roughness, sphere contact, wetting
-│   ├── optimizer/                 # relax() generator, Sobolev preconditioner, quasi-static controller
+│   ├── mesh.py  substrate.py      # start mesh, remeshing (split/collapse/Rivara), smoothing; substrate base
+│   ├── energy.py  anomaly.py  roughness.py  obstacle.py  wetting.py   # energy terms
+│   ├── solver.py  quasistatic.py  # relax() generator, Sobolev preconditioner, quasi-static controller
 │   ├── driver.py                  # remesh/restart loop now in main.py; emits Frames to FrameSinks, honours StopRequest
 │   ├── analysis.py                # force, COM, gap (moved out of visualize.py)
 │   ├── io/                        # frame.py (Frame, FrameSink), schema.py, writer.py, reader.py (h5py only)

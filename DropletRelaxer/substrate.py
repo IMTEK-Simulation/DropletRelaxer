@@ -31,7 +31,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.sparse.csgraph import connected_components
-from wetting import unique_edges
+from .wetting import unique_edges
 
 _MASK_CACHE = {}
 

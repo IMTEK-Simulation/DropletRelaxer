@@ -1,4 +1,4 @@
-"""Records the reference runs used by the regression test (test_reference.py).
+"""Records the reference runs used by the regression test (test/test_reference.py).
 
     python tools/reference_run.py            # rewrite all reference JSON files
     python tools/reference_run.py sessile    # only one scenario
@@ -21,10 +21,10 @@ sys.path.insert(0, ROOT)
 
 import numpy as np  # noqa: E402
 
-import config as _config  # noqa: E402
+import DropletRelaxer.config as _config  # noqa: E402
 import main as _main  # noqa: E402
 
-REFERENCE_DIR = os.path.join(ROOT, "tests", "reference")
+REFERENCE_DIR = os.path.join(ROOT, "test", "reference")
 
 
 def _sessile(cfg):

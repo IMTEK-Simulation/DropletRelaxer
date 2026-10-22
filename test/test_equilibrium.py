@@ -8,9 +8,10 @@ contact radius a = R sin(theta), centre height -R cos(theta). Measured tolerance
 import numpy as np
 import pytest
 
-import main as M
+import DropletRelaxer.analysis as M
 from runhelpers import (static_cfg, scaled_setup, run_solver, cap_prediction, refine_global)
-from substrate import base_triangle_mask
+from DropletRelaxer.solver import relax
+from DropletRelaxer.substrate import base_triangle_mask
 
 pytestmark = pytest.mark.slow
 
@@ -60,9 +61,8 @@ def test_static_droplet_is_a_spherical_cap_with_the_young_angle(cap):
 def test_young_laplace_pressure_is_constant_mean_curvature(cap):
     ang, cfg, last, t, b, V0 = cap
     i, v, A, V, _, _ = last
-    from energy import mean_curvature
+    from DropletRelaxer.energy import mean_curvature
     H = mean_curvature(v, t, b)
-    used = _dome_vertices(v, t, b)
     m = base_triangle_mask(v, t, b)
     interior = np.zeros(len(v), bool)
     interior[t[~m].ravel()] = True
@@ -106,8 +106,8 @@ def test_energy_decreases_monotonically_during_relaxation():
     v, t, b, mask, V0 = scaled_setup(cfg)
     k = cfg.solver.volume_penalty
     es = []
-    for out in __import__("solver").relax(v.copy(), t, b, mask, cfg.solver, None, start_iter=0, stop_iter=3000,
-                                          V_target=V0, anomaly_cfg=cfg.anomaly):
+    for out in relax(v.copy(), t, b, mask, cfg.solver, None, start_iter=0, stop_iter=3000,
+                     V_target=V0, anomaly_cfg=cfg.anomaly):
         i, vv, A, V, _, _ = out
         if i % 10 == 0:
             es.append(M.surface_free_energy(cfg, vv, t, b, A, None, None) + k * (V - V0) ** 2)

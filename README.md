@@ -158,6 +158,8 @@ Typical first experiments:
 
 ```
 run.sh          - startup script (automatic venv, see Quick start above)
+pyproject.toml  - package metadata (DropletRelaxer), pytest settings
+DropletRelaxer/ - the solver package:
 config.py       - all parameters (see above)
 mesh.py         - mesh generation (disk/polar cone), remeshing (global split, Rivara local split, collapse), tangential smoothing
 energy.py       - area/volume/curvature/wall energies and their analytical gradients
@@ -169,9 +171,10 @@ roughness.py    - optional random substrate roughness / chemical disorder (band-
 quasistatic.py  - event-driven sphere stepping: convergence test, step advance, adaptive rollback, ETA
 solver.py       - Sobolev-preconditioned gradient descent (generator)
 visualize.py    - PyVista live visualization (mesh, substrate grid, sphere, energy chart, camera controls)
+analysis.py     - per-frame post-processing (surface free energy)
 main.py         - entry point, wires everything together (incl. the remesh loop)
-tests/          - test suite (pytest): formula checks and equilibrium/force tests, see "Tests" below
-run_tests.sh    - runs the test suite (fast | slow | all)
+test/           - test suite (pytest): formula checks and equilibrium/force tests, see "Tests" below
+tools/reference_run.py - records the reference runs of test/test_reference.py
 docs/mathematical_background.pdf  - theory (Part I), implementation (Part II), Evolver comparison and outlook (Part III)
 docs/mathematical_background.tex  - LaTeX source for the above
 docs/mathematical_background.txt  - same LaTeX source as a plain .txt file
@@ -179,16 +182,17 @@ docs/mathematical_background.txt  - same LaTeX source as a plain .txt file
 
 ## Tests
 
-The suite lives in `tests/` and is separate from the program: a normal run does **not** execute it. It needs `pip install pytest` (not part of `requirements.txt`).
+The suite lives in `test/` and is separate from the program: a normal run does **not** execute it.
 
 ```
-./run_tests.sh          # fast tests, ~10 s (default)
-./run_tests.sh slow     # slow tests, ~4 min
-./run_tests.sh all
-python main.py --selftest   # (or CONFIG.selftest = True) fast tests first, abort the run if one fails
+pip install -e ".[test]"   # installs the package and pytest
+pytest                     # fast tests, ~10 s
+pytest -m slow             # slow tests, ~6 min
+pytest -m ""               # everything
+pytest test/test_force.py::test_force_equals_minus_energy_derivative   # a single slow test, by node id
 ```
 
-**Fast tests** (`pytest -m fast`; formulas on small meshes, each against an independent reference):
+**Fast tests** (plain `pytest`; formulas on small meshes, each against an independent reference):
 - area/volume/centre of mass: analytic values (triangle, hemisphere with convergence in the resolution), scaling laws, invariance under rigid motion and re-numbering;
 - every analytic gradient (area with weights and signed base, volume, shoelace wall energy, substrate and sphere penalties, anomaly polygon flux, sphere wetting energy) against central finite differences;
 - solid angle by turning angles against the spherical-cap formula; anomaly flux against a brute-force grid integral, roughness field (spectrum, flux integral, gradient), polygon inside/outside the disc, smootherstep properties (C2); closed mesh (base) against the open-mesh energy; non-convex ring fallback;
@@ -200,7 +204,8 @@ python main.py --selftest   # (or CONFIG.selftest = True) fast tests first, abor
 - static droplet = spherical cap with the Young angle (60, 90, 120 deg): contact radius within 1.5 % of the analytic cap for the actual volume (measured 0.1-0.6 %), all vertices on one sphere (<2 %), fitted contact angle within 1.5 deg, mean curvature = 1/R;
 - the same equilibrium after a global remesh in the middle of the run;
 - Sobolev alpha, learning rate and trust region change the path but not the result (contact radius spread < 0.3 %, energy < 0.03 %); energy decreases monotonically (up to the tiny rises of the tangential smoothing); the volume deficit of the penalty is proportional to 1/k (ratio 2.0 for k and 2k);
-- force on the sphere against the central difference of the re-equilibrated total energy (one global refinement, z0 +- 2): agreement 0.04 % at a wetting angle of 90 deg and 4-6 % at 120 deg (tolerances 3 % and 10 %); lateral force on a homogeneous wall below 0.2 % of F_z.
+- force on the sphere against the central difference of the re-equilibrated total energy (one global refinement, z0 +- 2): agreement 0.04 % at a wetting angle of 90 deg and 4-6 % at 120 deg (tolerances 3 % and 10 %); lateral force on a homogeneous wall below 0.2 % of F_z;
+- reference runs (`test/test_reference.py`, recorded by `tools/reference_run.py`): a sessile drop with global split + collapse and a short quasi-static sphere run with local remeshing reproduce the recorded final energy, area, volume, contact radius, remesh count and sphere force (relative 1e-10). With `DROPLET_REFERENCE_HASH=1` the SHA-256 of the final mesh is compared too (bit identity; meaningful only on the machine that recorded the reference).
 
 Checked by mutation: deliberately breaking a formula (wrong factor in the area/volume gradient, sign of the shoelace gradient, solid angle, anomaly sign, Laplacian, sphere penalty, path speed in the fast suite; removed radial reaction, flipped sign of the Young force, flipped wall-angle sign in the slow suite) makes at least one test fail.
 

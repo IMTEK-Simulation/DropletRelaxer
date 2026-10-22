@@ -12,7 +12,7 @@ import numpy as np
 import pyvista as pv
 import vtk
 
-from energy import mean_curvature
+from DropletRelaxer.energy import mean_curvature
 
 _SCALAR_BAR_TITLE = "mean curvature |H|"
 

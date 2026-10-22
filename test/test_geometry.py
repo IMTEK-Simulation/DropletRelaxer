@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 
 from conftest import fd_gradient, rel_err
-from energy import area_and_grad, volume_and_grad, center_of_mass
-from mesh import make_disk_cone, make_hemisphere
+from DropletRelaxer.energy import area_and_grad, volume_and_grad, center_of_mass
+from DropletRelaxer.mesh import make_disk_cone, make_hemisphere
 
 
 def _random_dome(rng, n_rings=4):
@@ -56,7 +56,8 @@ def test_flat_down_gradient_matches_finite_differences(rng):
     t = np.array([[0, 2, 1], [0, 3, 2]])
     fd = np.array([True, True])
     g = area_and_grad(v, t, flat_down=fd)[1]
-    gfd = fd_gradient(lambda x: area_and_grad(x, t, flat_down=fd)[0], v, h=1e-6, idx=[k for k in range(12) if k % 3 != 2])
+    gfd = fd_gradient(lambda x: area_and_grad(x, t, flat_down=fd)[0], v, h=1e-6,
+                      idx=[k for k in range(12) if k % 3 != 2])
     assert rel_err(g[:, :2], gfd[:, :2]) < 1e-7
 
 

@@ -1,5 +1,5 @@
 """Regression guard: the reference scenarios of tools/reference_run.py must
-reproduce the recorded final state (tests/reference/*.json).
+reproduce the recorded final state (test/reference/*.json).
 
 Scalars are compared with a tight relative tolerance. The SHA-256 of the final
 mesh is compared only when DROPLET_REFERENCE_HASH=1 is set, i.e. on the machine

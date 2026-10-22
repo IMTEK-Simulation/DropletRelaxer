@@ -10,7 +10,7 @@ Energy functionals and their analytical gradients:
 import numpy as np
 import scipy.sparse as sp
 
-from substrate import base_triangle_mask
+from .substrate import base_triangle_mask
 
 
 def cross3(a, b):
@@ -196,7 +196,7 @@ def mean_curvature(verts, tris, boundary_idx=None):
     # its interior vertices get NaN (drawn in the plotter's NaN colour).
     base = base_triangle_mask(verts, tris, boundary_idx)
     if base.any():
-        tris_all, tris = tris, tris[~base]
+        tris = tris[~base]
     _, gradA, tri_area = area_and_grad(verts, tris)
     A_mixed = np.zeros(n_verts)
     for col in range(3):

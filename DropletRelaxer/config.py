@@ -671,13 +671,6 @@ class Config:
     roughness_field: object = field(default=None, repr=False, compare=False)
     # Runtime object (RoughnessField) built by main() from `roughness`; not a setting.
 
-    selftest: bool = False
-    # True (or `python main.py --selftest` / `./run.sh --selftest`): run the fast
-    # test suite (`pytest -m fast`, a few seconds, see tests/) before the
-    # simulation and stop if a test fails. Needs `pip install pytest`. The slow
-    # tests (equilibrium shapes, force vs. energy derivative, ~4 min) are never
-    # started automatically: run `./run_tests.sh slow`.
-
 
 # The instance actually used by main.py. Either edit this directly, or
 # build your own Config() with different values in main.py.

@@ -3,8 +3,8 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
-from obstacle import sphere_center_at, path_length
-from quasistatic import QuasiStatic
+from DropletRelaxer.obstacle import sphere_center_at, path_length
+from DropletRelaxer.quasistatic import QuasiStatic
 
 
 def _ocfg(**kw):
@@ -127,10 +127,9 @@ def test_remesh_drops_rollback_state_but_keeps_the_convergence_window():
 
 
 def test_solver_steps_the_sphere_only_after_convergence():
-    import copy
-    import main as M
-    from solver import relax
-    from tests.runhelpers import static_cfg, scaled_setup
+    import DropletRelaxer.analysis as M
+    from DropletRelaxer.solver import relax
+    from runhelpers import static_cfg, scaled_setup
     cfg = static_cfg(90.0, sphere=True)
     cfg.obstacle.center_start = (0.0, 0.0, 125.0)
     cfg.obstacle.center_end = (2.0, 0.0, 125.0)
