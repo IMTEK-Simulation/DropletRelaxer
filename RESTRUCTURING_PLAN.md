@@ -1,8 +1,8 @@
 # Restructuring plan: solver / file format / viewer / docs
 
-Status: proposal (2026-10-22), decisions of §7 folded in. The VTK pin bump is done. Nothing below is implemented yet except the git
-link to `git@github.com:IMTEK-Simulation/DropletRelaxer.git` (local `main`
-tracks `origin/main`, which holds only the MIT `LICENSE`; all code is untracked).
+Status: implemented on branch `restructure` (2026-10-22), steps 1-8 of §6
+except the first release tag. Deviations from the text below are listed in
+§8.
 
 Goals: (1) Quarto documentation that stays in sync with the code, rendered to
 PDF in CI; (2) split the monolith into a headless solver that runs on a
@@ -556,3 +556,30 @@ Settled (round 4):
   if `DISPLAY` is unset or the session is Wayland. It has a `--software-gl`
   flag that sets the Mesa variables before VTK is imported. The Conda advice
   moves to the troubleshooting docs.
+
+## 8. Implementation notes (deviations from the plan above)
+
+- **Package layout is flat** (§4 note): the solver modules keep their names
+  inside `DropletRelaxer/`; subpackages would only add import cycles.
+- **Algorithm block** in the docs is a Markdown list in a callout instead of
+  the `quarto-ext/pseudocode` extension, so the cross-references work in
+  PDF and HTML. The TikZ figure is compiled to `triangle.pdf`/`.png` (the
+  source `triangle.tex` is kept). Pandoc expanded the custom macros, so no
+  macro include is needed.
+- **Run file details found by testing against VTK** (`vtkHDFReader`, VTK
+  9.3.1 and 9.7.1): `FieldDataSizes` is `[components, tuples]`; the file
+  must be written in the HDF5 1.10 format (h5py's `libver="latest"` with
+  HDF5 2.0 produces files VTK's bundled HDF5 1.14 cannot open).
+- **SWMR readers cannot refresh attributes**, only datasets: run status and
+  end iteration are datasets, and a following reader counts frames by
+  `Steps/Values` (written after all other data of a frame), not by the
+  `NSteps` attribute.
+- **Checkpoints** have two alternating slots; the driver's loop state and the
+  quasi-static controller state are part of them. Restart after a kill is
+  tested to be bit-identical, also for the quasi-static sphere scenario.
+- **Reference runs** are two short scenarios (sessile drop with global split
+  + collapse; quasi-static sphere with local remeshing), not the default
+  config (10^6 iterations).
+- **No release tag yet**: `publish.yml` uploads both distributions to PyPI
+  via trusted publishing on a `v*` tag; the PyPI projects and the `pypi`
+  environment have to be set up first.
