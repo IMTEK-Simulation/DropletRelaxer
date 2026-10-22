@@ -5,6 +5,7 @@ import copy
 import numpy as np
 
 import DropletRelaxer.config as _config
+from DropletRelaxer.config import apply_volume_scale
 from DropletRelaxer.energy import volume_and_grad
 from DropletRelaxer.mesh import make_start_mesh, build_dof_mask, resolve_volume_scale
 from DropletRelaxer.solver import relax
@@ -15,14 +16,11 @@ def fresh_config():
 
 
 def scaled_setup(cfg):
-    """Mesh + the config rescaling of main.main() (volume_penalty, snap distance,
-    capture radius, substrate size)."""
+    """Mesh + the config rescaling of the driver (config.apply_volume_scale),
+    applied to `cfg` in place."""
     s = resolve_volume_scale(cfg.mesh)
-    if s != 1.0:
-        cfg.solver.volume_penalty /= s ** 4
-        cfg.obstacle.wetting_snap_distance *= s
-        cfg.obstacle.capture_radius *= s
-        cfg.vis.substrate_size *= s
+    scaled = apply_volume_scale(cfg, s)
+    cfg.solver, cfg.obstacle = scaled.solver, scaled.obstacle
     verts, tris, bidx = make_start_mesh(cfg.mesh)
     mask = build_dof_mask(len(verts), bidx)
     V0 = volume_and_grad(verts, tris)[0]
@@ -48,7 +46,6 @@ def static_cfg(angle_deg=90.0, sphere=False, n_iter=3000):
     cfg.anomaly.enabled = False
     cfg.obstacle.enabled = sphere
     cfg.quasi.enabled = False   # these tests drive relax() with a fixed iteration count
-    cfg.vis.live = False
     return cfg
 
 

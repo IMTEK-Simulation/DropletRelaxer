@@ -39,7 +39,7 @@ packages = ["DropletRelaxer"]
 exclude = ["/venv", "/runs", "/docs/_book"]
 
 [tool.pytest.ini_options]
-testpaths = ["test"]
+testpaths = ["test", "viewer/test"]
 addopts = "-q --strict-markers"
 markers = [
     "slow: real relaxation runs (minutes); deselected unless -m is given or the test is named by node id",

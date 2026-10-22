@@ -15,14 +15,13 @@ import json
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)
-sys.path.insert(0, ROOT)
+import numpy as np
 
-import numpy as np  # noqa: E402
+import DropletRelaxer.config as _config
+from DropletRelaxer.console import ConsoleSink
+from DropletRelaxer.driver import Driver
 
-import DropletRelaxer.config as _config  # noqa: E402
-import main as _main  # noqa: E402
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 REFERENCE_DIR = os.path.join(ROOT, "test", "reference")
 
@@ -47,11 +46,10 @@ def _sphere(cfg):
 SCENARIOS = {"sessile": _sessile, "sphere": _sphere}
 
 
-def run(name):
+def run(name, sinks=()):
     cfg = copy.deepcopy(_config.CONFIG)
-    cfg.vis.live = False
     SCENARIOS[name](cfg)
-    res = _main.main(cfg)
+    res = Driver(cfg, sinks=sinks).run()
     h = hashlib.sha256()
     h.update(np.ascontiguousarray(res["verts"], dtype=np.float64).tobytes())
     h.update(np.ascontiguousarray(res["tris"], dtype=np.int64).tobytes())
@@ -66,7 +64,7 @@ def run(name):
 def main(names):
     os.makedirs(REFERENCE_DIR, exist_ok=True)
     for name in names or SCENARIOS:
-        out = run(name)
+        out = run(name, sinks=[ConsoleSink()])
         with open(os.path.join(REFERENCE_DIR, f"{name}.json"), "w") as f:
             json.dump(out, f, indent=2)
             f.write("\n")

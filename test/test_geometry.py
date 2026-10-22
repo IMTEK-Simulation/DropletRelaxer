@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from conftest import fd_gradient, rel_err
+from numhelpers import fd_gradient, rel_err
 from DropletRelaxer.energy import area_and_grad, volume_and_grad, center_of_mass
 from DropletRelaxer.mesh import make_disk_cone, make_hemisphere
 

@@ -3,7 +3,7 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
-from conftest import fd_gradient, rel_err
+from numhelpers import fd_gradient, rel_err
 from DropletRelaxer.wetting import (patch_solid_angle, sphere_wetting_energy_and_grad, compute_wetted_set,
                      wetted_boundary_loop)
 from DropletRelaxer.obstacle import sphere_contact_energy_and_grad

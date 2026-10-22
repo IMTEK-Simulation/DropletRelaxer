@@ -32,6 +32,25 @@ jobs:
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest
 
+  viewer:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: sudo apt-get update && sudo apt-get install -y xvfb libgl1 libegl1 libxrender1
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -e ".[test]" -e "viewer[test]"   # latest VTK on purpose
+      - run: python -c "import vtk; print('VTK', vtk.vtkVersion.GetVTKVersion())"
+      - run: xvfb-run -a python -m pytest viewer/test
+
   slow:
     if: >-
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' ||
