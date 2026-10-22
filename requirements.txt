@@ -1,0 +1,12 @@
+numpy>=1.24
+scipy>=1.10
+# VTK >= 9.3 for vtkHDFReader. No upper bound: the GLX "Could not find a
+# decent config" crash once seen with 9.7.1 is caused by a missing
+# multisample GLX config, which visualize.py works around by disabling
+# multisampling -- see README Troubleshooting.
+vtk>=9.3
+pyvista>=0.43
+# Save button: video of the replay (mp4 via ffmpeg bundled in imageio-ffmpeg)
+imageio>=2.30
+imageio-ffmpeg>=0.4.9
+# Tests (optional): pip install pytest   -- see README, section "Tests"
