@@ -19,6 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+docs = ["jupyter", "nbclient", "nbformat", "ipykernel", "pyyaml"]
 
 [project.scripts]
 droplet-relax = "DropletRelaxer.cli:main"
@@ -39,7 +40,7 @@ version-file = "DropletRelaxer/_version.py"
 packages = ["DropletRelaxer"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/venv", "/runs", "/docs/_book"]
+exclude = ["/venv", "/runs", "/docs/_book", "/docs/.quarto"]
 
 [tool.pytest.ini_options]
 testpaths = ["test", "viewer/test"]

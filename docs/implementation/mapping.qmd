@@ -1,0 +1,27 @@
+# Mapping from Equations to Code {#sec-mapping}
+
+Every name in the table is a dotted Python name; a test
+(`test/test_docs.py`) checks that each one imports, so the table cannot
+silently go stale when code moves.
+
+::: {#tbl-mapping}
+| Equation / section | Code | Meaning |
+|:---|:---|:---|
+| @eq-discrete-area, @eq-area-grad-vi--@eq-area-grad-vjvk, @eq-weighted-energy | `DropletRelaxer.energy.area_and_grad` | Weighted area and gradient |
+| @eq-discrete-volume, @eq-volume-grad | `DropletRelaxer.energy.volume_and_grad` | Volume and gradient |
+| @eq-curvature-from-gradient | `DropletRelaxer.energy.mean_curvature` | Curvature (colouring, `mean_curvature` in the run file) |
+| @eq-penalty, @eq-penalty-grad | `DropletRelaxer.solver.relax` | Penalty gradient |
+| @sec-meshes | `DropletRelaxer.mesh.build_dof_mask` | Contact-line DOFs |
+| @eq-shoelace, @eq-shoelace-grad | `DropletRelaxer.energy.substrate_wall_energy_and_grad`, `DropletRelaxer.substrate.add_base_mesh` | Wall energy / base |
+| @eq-anomaly-quad, @eq-anomaly-discrete-grad | `DropletRelaxer.anomaly.anomaly_wall_energy_and_grad` | Wettability anomaly |
+| @eq-sphere-penalty | `DropletRelaxer.obstacle.sphere_contact_energy_and_grad` | Collision / adhesion |
+| @eq-solid-angle, @eq-sphere-wetting-energy | `DropletRelaxer.wetting.sphere_wetting_energy_and_grad` | Sphere wetting |
+| @eq-force-discrete | `DropletRelaxer.solver.relax` | Force on the sphere |
+| @eq-com-discrete | `DropletRelaxer.energy.center_of_mass` | Centre of mass |
+| @eq-total-energy | `DropletRelaxer.analysis.surface_free_energy` | Total surface free energy per frame |
+| @eq-sobolev-grad, @eq-explicit-euler | `DropletRelaxer.energy.build_laplacian`, `DropletRelaxer.solver.relax` | Sobolev step |
+| @eq-trust-region | `DropletRelaxer.solver.relax` | Trust region |
+| @sec-remeshing | `DropletRelaxer.mesh.refine_rivara`, `DropletRelaxer.mesh.collapse_short_edges`, `DropletRelaxer.driver.Driver` | Remeshing and scheduling |
+
+: Mapping of the equations to the code.
+:::

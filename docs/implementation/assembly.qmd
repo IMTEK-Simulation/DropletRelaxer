@@ -1,0 +1,51 @@
+# Assembly of Energy and Force {#sec-assembly}
+
+
+In every iteration the solver assembles the total gradient $g$ in the following order (`solver.relax`):
+
+1.  Sphere centre from the path; wetted vertex set and contact loop (if wetting is on).
+
+2.  Triangle weights $w_t$ @eq-weighted-energy; area $A$ and its gradient (weights, signed base area), volume $V$ and $g_V$. A guard $0.5V_0<V<1.5V_0$ protects against corrupt states.
+
+3.  $g^E=g_A+2k(V-V_0)\,g_V$ @eq-penalty-grad. Only if there is no base: the wall term @eq-shoelace-grad.
+
+4.  The anomaly term @eq-anomaly-discrete-grad (contact-line vertices only), the substrate-penetration penalty.
+
+5.  Sphere collision (and adhesion) @eq-sphere-penalty, with the force accumulation of @eq-force-discrete.
+
+6.  Young wetting term @eq-sphere-wetting-energy, with its force contribution.
+
+7.  Removal of the radial component on wetted vertices (with its force contribution); $z$-gradient set to zero on the ring and base.
+
+8.  Force and diagnostics stored; convergence test $\lVert g\rVert<$ `grad_tol`.
+
+Then follow the Sobolev solve, the step, and the numerical devices of @sec-devices.
+
+## Wetted Set and Contact Loop {#sec-sphere-wetting}
+
+A vertex is *wetted* if $\big|\lVert v_i-\mathbf c\rVert-R\big|<d_{\mathrm{snap}}$ (`wetting_snap_distance`); the set is restricted to the
+largest connected component in the mesh graph. A patch needs at least `wetting_min_patch_vertices` vertices. The set has no memory.
+Triangles with three wetted vertices get weight $0$. The ordered boundary of the patch is the loop used in @eq-sphere-wetting-energy;
+loops that wrap more than about $115^\circ$ half-width raise `SolverDiverged`, and configurations that are not a single simple loop (several patches, pinch points) are skipped for that iteration.
+Wetted vertices are projected back onto the sphere after every step and the patch interior is relaxed (@sec-devices).
+
+The gradient of @eq-sphere-wetting-energy is computed by central finite differences ($\pm\varepsilon$ in each coordinate). Since a turning angle depends only on three consecutive loop vertices, vertices at least $3$ apart can be perturbed simultaneously;
+a greedy colouring (`wetting._stencil_colors`) turns the cost of the loop into a handful of vectorized evaluations.
+
+**Lesson on the snap distance.** `wetting_snap_distance` is scaled with the mesh, and a value larger than one edge length re-captures the first vertex row onto the sphere in every iteration, so the contact line can neither recede nor reach the Young angle.
+With the default $d_{\mathrm{snap}}=0.01$ the static sphere angle at $\theta_s=120^\circ$ is $119$--$120^\circ$ (wall: $\approx118^\circ$); with the earlier, too large value it was only $\approx100^\circ$.
+
+## Anomaly
+
+`anomaly.py` implements @eq-anomaly-quad and @eq-anomaly-discrete-grad. The number of Gauss--Legendre nodes per edge is chosen from the ratio of the transition width $2h$ to the edge length, in steps of $16$ between $16$ and $96$.
+The gradient agrees with finite differences to $\approx10^{-9}$ and the energy with a brute-force area integral to $\approx10^{-5}$ relative error. At start-up the program prints a note if the transition width is smaller than the contact-line edge length ($2$ versus $5.12$ in the default configuration): the polygon then cannot resolve the profile, and the anomaly acts as a nearly sharp step.
+A test with a hydrophilic patch at the contact line shifts the centre of mass by $+8$ in $x$.
+
+## Force on the Sphere
+
+@eq-force-discrete is evaluated inside every iteration, not by differences of energies. In a static check, $F_z=-58.9$ compared with $-59.95$ from $\mathrm{d}E_{\mathrm{tot}}/\mathrm{d}z$ of equilibrium states ($\approx2\%$). The older estimate
+$-(\mathrm{d}E/\mathrm{d}s)(\mathrm{d}z/\mathrm{d}s)$ gives only the component along the motion and is polluted by the liquid's own relaxation (correlation $\approx0.12$ with the direct force); it is kept only as cross-check
+(`force_from_energy`, `force_parallel` in the saved data). The plotted force is a trailing mean over `force_average_window` recorded frames.
+
+**Lateral force is a numerical lag force.** On a homogeneous substrate $F_x,F_y\to0$ at equilibrium (@sec-force-theory). The lateral force during a moving run is a pseudo-dynamic lag force of the gradient-flow relaxation; its size depends on the learning rate, Sobolev $\alpha$, the trust region and the sphere speed,
+and vanishes for speed $\to0$. It contains no viscous friction and no contact-angle hysteresis and should be used only comparatively at fixed settings. The sphere speed does not limit the contact line: halving the speed changes the radii by $<1\%$.

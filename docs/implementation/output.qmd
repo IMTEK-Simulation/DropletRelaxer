@@ -1,0 +1,26 @@
+# Output and Visualization {#sec-output}
+
+**Run file.** Every recorded frame goes to the HDF5 run file (@sec-file-format):
+the mesh and its per-vertex/per-triangle data in the VTKHDF layout that ParaView
+reads directly, the per-frame scalars (energy, force, centre of mass, gap, ...)
+as field data, and everything needed to restart the run. The viewer plots only
+what is stored there, so a window on a finished run, on a run in progress
+(`droplet-view --follow`) and the live window show the same.
+
+**Window.** The surface is coloured by the unsigned curvature of @sec-mean-curvature; the ring is a cyan tube, the contact line on the sphere is lime. A wettability anomaly is drawn as a disc on the substrate
+(blue hydrophilic, violet hydrophobic). A three-line block at the lower left shows the centre of mass, its $xy$-offset to the sphere centre and the volume.
+In the live window the mesh is redrawn for every recorded frame (every `output.every` iterations, default $200$, or every converged sphere step). Outlines are added with `render=False`, which halved the number of renders ($887\to419$; $120\to75$ s with software OpenGL).
+
+**Charts and progress.** Two charts, axis colours matching the axis tripod ($x$ tomato, $y$ green, $z$ blue), both over the tip $x$-coordinate (sphere centre $x$) with fixed limits from the planned path, one point per converged step:
+
+- *Left:* total surface free energy @eq-total-energy (plus the anomaly, roughness and sphere patch terms).
+
+- *Right:* $F_x,F_y,F_z$ in the tripod colours (equilibrium values, no averaging).
+
+Window and charts are only updated when a step has converged; in between a progress bar (fraction of the path, elapsed time, ETA from the wall time per path length of the recent steps) is refreshed about once per second. After the run the history slider runs over the tip $x$-coordinate. Diamond markers show the current frame.
+
+**Save.** After a run, the Save button (next to Play) records the replay into
+`run.mp4` in the run's folder (imageio with ffmpeg, falling back to GIF; up to
+`video_max_frames` $=600$ frames), plus `frames.csv` (one row per sphere step)
+in quasi-static mode. `droplet-view run.h5 --video out.mp4` does the same without
+a window. All numbers are in the run file; there is no separate data export.

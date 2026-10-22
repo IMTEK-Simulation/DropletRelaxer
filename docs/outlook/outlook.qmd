@@ -1,0 +1,81 @@
+# Context and Outlook {#sec-outlook}
+
+
+**Possible extensions.** Ordered roughly by their physical significance; the first group removes
+limitations stated in Part II, the second adds physics, the third improves numerics.
+
+*Physics and model*
+
+- **Topology change / pinch-off** (still open, the most important): track the contact loop on the sphere and re-triangulate so that a thin neck
+  can break into a detached bridge (@sec-evolver). Today the topology is fixed (@sec-remeshing).
+
+- **Contact-angle hysteresis, pinning and contact-line dissipation:** replace the pseudo-dynamic lag force
+  (@sec-force-theory) by a physical law, e.g. advancing/receding angles and a viscous contact-line friction, so that lateral forces and
+  stick--slip over the anomaly become quantitative. This also needs a physical time scale instead of the learning rate.
+
+- **General heterogeneous walls:** several discs, stripes, or an arbitrary field $\kappa(x,y)$. The flux construction of @sec-anomaly-theory
+  works for any field with a computable primitive; a general field would need a numerical primitive on a background grid.
+
+- **Unilateral wetting constraint:** allow wetted vertices to leave the sphere without remeshing (a contact inequality instead of the bilateral projection), so that the contact line can recede smoothly.
+
+- **General, rotating or multiple obstacles,** including torque on the obstacle. The solid-angle construction is specific to a sphere; other shapes need a different
+  area functional on the obstacle surface.
+
+- **Sheets wrapping around the sphere:** multi-chart or volume/phase-field representations remove the limit on the wetted half-width.
+
+- **Gravity:** the term $\int\rho g z\,\mathrm{d}V$, with the gradient from the divergence theorem as for the volume (@sec-area-gradient).
+
+- **Multiple volumes / phases:** the penalty sum @eq-penalty and the projection @eq-lagrange-projection generalize to several constraints.
+
+*Constraints and accuracy*
+
+- **Exact volume conservation:** an augmented Lagrangian or exact projection instead of the pure penalty, to remove the $2$--$3\%$ volume drift during contact.
+
+- **Analytic gradient of the sphere wetting energy** instead of finite differences with stencil colouring.
+
+- **Validation:** comparison with axisymmetric Young--Laplace capillary-bridge solutions and Surface Evolver benchmarks, and a mesh-convergence study; isolate the remaining $\approx4\%$ wall hysteresis at $120^\circ$.
+
+*Numerics*
+
+- **Faster and adaptive stepping:** line search, L-BFGS or an adaptive step instead of the fixed $\eta$; compiled kernels or cached topology data for the hot loops (the Numba test gave only $10$--$15\%$, so the Python-level overhead and the remeshing dominate).
+
+- **Mesh quality:** edge flips (equiangulation), cotangent-weighted or Lloyd-type tangential regularization instead of the centroid smoothing, and a fully adaptive local collapse with a spatially varying target length (for several obstacles).
+
+::: thebibliography
+9
+
+K. A. Brakke,
+*The Motion of a Surface by Its Mean Curvature*,
+Mathematical Notes 20, Princeton University Press, 1978.
+
+K. A. Brakke,
+*The Surface Evolver*,
+Experimental Mathematics **1**(2), 141--165, 1992.
+
+M. Meyer, M. Desbrun, P. Schröder, A. H. Barr,
+*Discrete Differential-Geometry Operators for Triangulated
+2-Manifolds*,
+in: Visualization and Mathematics III, Springer, 2003.
+
+M. Desbrun, M. Meyer, P. Schröder, A. H. Barr,
+*Implicit Fairing of Irregular Meshes using Diffusion and
+Curvature Flow*,
+Proc. SIGGRAPH 1999.
+
+J. W. Neuberger,
+*Sobolev Gradients and Differential Equations*,
+Lecture Notes in Mathematics 1670, Springer, 1997.
+
+G. Sundaramoorthi, A. Yezzi, A. C. Mennucci,
+*Sobolev Active Contours*,
+International Journal of Computer Vision **73**(3), 345--366,
+2007.
+
+M.-C. Rivara,
+*Algorithms for Refining Triangular Grids Suitable for Adaptive and Multigrid Techniques*,
+SIAM Journal on Numerical Analysis **21**(3), 604--613, 1984.
+
+W. T. Tutte,
+*How to Draw a Graph*,
+Proceedings of the London Mathematical Society **s3-13**, 743--767, 1963.
+:::

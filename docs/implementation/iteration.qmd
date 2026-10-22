@@ -1,0 +1,35 @@
+# The Iteration: Step and Numerical Devices {#sec-devices}
+
+
+::: {.callout-note appearance="simple" icon=false}
+**Algorithm: one relaxation segment (between two remeshings)**
+
+1. $V_0\gets$ target volume (from the start mesh); build $L$; factorize $M=I+\alpha L$ once per topology.
+2. **for** $n=n_0,n_0+1,\dots$
+    1. sphere centre $\mathbf c(n)$; wetted set and loop;
+    2. assemble $g$ as in @sec-assembly; store the force;
+    3. **if** $\lVert g\rVert<\text{tol}$: **stop**;
+    4. solve $M\,g_{\mathrm{Sob}}=g$ componentwise (@eq-sobolev-grad);
+    5. $\delta x\gets-\eta\,g_{\mathrm{Sob}}$, capped per vertex (@eq-trust-region);
+    6. $x\gets x+\delta x$; ring $z\gets0$;
+    7. every $N$ iterations: tangential smoothing;
+    8. re-embed the base; relax the interior of the wetted patch and project it onto the sphere;
+    9. finiteness and explosion guards; yield the state to the driver.
+:::
+
+Numerical devices (not derived from the energy; they change the path or mesh quality, not the minimizer of the model):
+
+- **Sobolev solve.** `scipy.sparse.linalg.factorized` of $I+\alpha L$ (`energy.build_laplacian`); factorized again only after a topology change; applied to $x,y,z$ separately. Default $\alpha=3$.
+
+- **Trust region.** @eq-trust-region with $f=$ `max_step_fraction` $=0.3$; the floor is $\tfrac14$ of the median edge length.
+
+- **Tangential smoothing.** Every `tangential_smoothing_every` $=10$ iterations a fraction $0.3$ of the offset to the neighbour centroid, with its normal component removed, is applied; also right after each remesh. Its purpose is mesh quality (triangles do not crowd at the apex); it does not follow the energy.
+
+- **Patch interior.** Interior vertices of the wetted patch are relaxed and projected onto the sphere each iteration.
+
+- **Guards.** Volume window, finiteness, step explosion, and the wrapping guard (`SolverDiverged`).
+
+- **Soft penalties.** Volume, collision and substrate stiffness have absolute values; with $\gamma_{lv}=0.88$ the surface forces are $12\%$ weaker relative to them. The volume drifts by $2$--$3\%$ from $V_0$ during contact.
+
+**Model limitations (measured).** The wetted vertices are held by a *bilateral* constraint and detach only through remeshing. A wall-ring hysteresis of about $4\%$ remains at $\theta_Y=120^\circ$; it is independent of the speed and its cause is not isolated.
+The relaxation is a pseudo-time process without inertia, viscosity or contact-line friction.

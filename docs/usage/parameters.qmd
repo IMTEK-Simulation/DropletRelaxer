@@ -1,0 +1,41 @@
+# Parameter Reference {#sec-parameters}
+
+Generated from the dataclasses in `DropletRelaxer.config` and
+`DropletViewer.config` (the docstring below each field), with the default
+values. See @sec-usage-configuration for the file format.
+
+```{python}
+#| echo: false
+#| output: asis
+from dataclasses import MISSING, fields
+
+from DropletRelaxer.config import Config, _toml_value, field_docs
+from DropletViewer.config import ViewerConfig
+
+
+def default(f):
+    if f.default is not MISSING:
+        return f.default
+    return f.default_factory()
+
+
+def group(name, cls, intro):
+    print(f"## `[{name}]`\n")
+    print(intro + "\n")
+    docs = field_docs(cls)
+    for f in fields(cls):
+        d = default(f)
+        value = "(unset)" if d is None else _toml_value(list(d) if isinstance(d, tuple) else d)
+        print(f"**`{f.name}`** = `{value}`\n")
+        print("```text")
+        print(docs.get(f.name, ""))
+        print("```\n")
+
+
+cfg_docs = field_docs(Config)
+for g in fields(Config):
+    cls = type(default(g))
+    intro = (cls.__doc__ or "").strip()
+    group(g.name, cls, " ".join(intro.split()) or cfg_docs.get(g.name, ""))
+group("viewer", ViewerConfig, " ".join((ViewerConfig.__doc__ or "").split()))
+```

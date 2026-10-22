@@ -1,0 +1,118 @@
+# Comparison to Ken Brakke's Surface Evolver {#sec-evolver}
+
+
+`droplet_relaxer` is deliberately built on the same core
+mathematical machinery as Brakke's Surface Evolver [@Brakke1992]
+-- discretize the surface as a triangle mesh, move vertices along an
+energy gradient -- and @sec-mean-curvature through
+@sec-remeshing of this document derive that machinery
+from scratch. This section makes the relationship explicit: where the
+two agree in principle, and where this project is a narrower,
+special-purpose reimplementation rather than a general tool.
+
+## Where the Two Agree
+
+The core discrete quantities are the same construction: Evolver's
+area and volume gradients, and its handling of a fixed-height
+substrate constraint via a restricted degree-of-freedom space, are the
+same discrete differential-geometry identities derived independently
+in @sec-area-gradient--@sec-mean-curvature and
+@sec-meshes of this document. Both tools are, at
+bottom, performing a gradient flow of the same functional
+@eq-problem on a piecewise-linear surface.
+
+## Where This Project Is Narrower
+
+Generality.
+
+:   Evolver is a general-purpose, scriptable
+    tool: an interactive command language for describing essentially
+    arbitrary variational surface problems (multiple bodies, multiple
+    volume/pressure constraints, arbitrary constraint surfaces,
+    user-defined energy quantities) and driving many different
+    evolution strategies over them. `droplet_relaxer` is a
+    fixed single-purpose Python program for exactly one geometry: a
+    single droplet, a single flat substrate, and at most one moving
+    spherical obstacle (`DropletRelaxer.config`); every energy term in
+    @sec-mean-curvature--@sec-sphere-wetting is
+    hardcoded into `energy.py`/`wetting.py`/`obstacle.py`
+    rather than expressed in a general constraint/quantity language.
+    Extending this project to a genuinely new geometry means writing
+    new Python, not a new script.
+
+Constraint handling.
+
+:   Evolver's volume constraints are handled
+    by (an efficient, generalized form of) the exact Lagrange
+    projection of @sec-constraint
+    @eq-lagrange-projection, applied exactly at every step.
+    `droplet_relaxer` instead uses the simpler quadratic
+    penalty @eq-penalty, which only converges to exact volume
+    conservation as the penalty weight $k\to\infty$ and in practice
+    leaves a small residual $|V-V_0|$ at any finite $k$ and iteration
+    count (@sec-constraint discusses why the penalty
+    method was chosen here anyway: it needs no orthogonalization
+    against several simultaneous constraints and composes as a plain
+    additive gradient term).
+
+Solver method.
+
+:   Evolver's default optimization step is plain
+    (unpreconditioned) $L^2$ gradient descent, with an optional
+    conjugate-gradient and Hessian (Newton-type) mode available as
+    alternatives. `droplet_relaxer` implements only the
+    Sobolev-preconditioned gradient descent of @sec-sobolev
+    -- there is no Newton/Hessian mode in this program. A separate
+    method-comparison experiment in this project (outside the scope of
+    this document; see the project materials) found that for this
+    specific problem, Newton-type steps -- even with an exact
+    Hessian-vector product via automatic differentiation --
+    underperform the Sobolev gradient here, plausibly due to
+    nearly-degenerate tangential degrees of freedom in the mesh (moving
+    a vertex along the surface, rather than across it, barely changes
+    the energy, which makes the Hessian ill-conditioned in those
+    directions); this is specific to this experiment's setup, not a
+    general claim about Newton methods on this class of problem.
+
+Mesh topology and remeshing.
+
+:   Evolver's simplicial complex
+    supports genuine topology changes (Brakke1992) -- edge flips
+    (equiangulation), and vertex/edge/facet insertion and deletion
+    general enough to let a thin neck pinch off into separate bodies.
+    `droplet_relaxer`'s remeshing
+    (@sec-remeshing) only ever changes *resolution*
+    on a single, fixed-topology open surface: global 1-to-4
+    subdivision, local Rivara refinement, and a conservative,
+    link-condition-gated edge collapse -- no edge flips, and no
+    operation that could create or remove a boundary component. A
+    droplet being dragged by the sphere obstacle can therefore stretch
+    into an arbitrarily thin neck, but never pinches off into a
+    detached liquid bridge (@sec-constraint-sphere).
+
+Contact energies.
+
+:   Evolver's general constraint framework can,
+    in principle, express an exact contact-angle energy against an
+    arbitrary constraint surface (not just a plane). This project
+    implements only two contact energies, each specific to its own
+    geometry: the exact line-integral Young's-equation term against
+    the flat substrate (@sec-wall-energy and @sec-meshes, via the planar
+    shoelace formula @eq-shoelace or, equivalently, the base area) and, separately, the exact
+    discrete-Gauss-Bonnet spherical version against the sphere
+    obstacle (@sec-sphere-wetting). Both are exact for
+    their one specific surface (plane, sphere), constructed by
+    different means (a planar vector potential vs. a gauge-free
+    solid-angle sum) -- neither generalizes automatically to an
+    arbitrary obstacle shape the way Evolver's constraint mechanism
+    is designed to.
+
+Maturity and validation.
+
+:   Evolver is production-grade software
+    with a three-decade publication record across many independent
+    research groups. `droplet_relaxer` is a from-scratch
+    reimplementation of the same core mathematics, written and tested
+    for this one project; its correctness rests on the gradient
+    derivations in this document and this project's own tests (e.g. the checks listed in @sec-validation), not on independent
+    third-party validation.

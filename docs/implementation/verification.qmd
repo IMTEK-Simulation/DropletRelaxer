@@ -1,0 +1,19 @@
+# Verification {#sec-validation}
+
+
+The following checks were carried out; none is an independent third-party validation.
+
+- Closed versus open mesh: energy and gradient agree to $\approx10^{-13}$ ($60^\circ$, $90^\circ$, $120^\circ$).
+
+- Contact angles at $120^\circ$: sphere $119$--$120^\circ$, wall $\approx118^\circ$; cone COM height $10.72$ versus $h/4=10.76$.
+
+- Anomaly: gradient versus finite differences $\approx10^{-9}$; energy versus brute-force integral $\approx10^{-5}$.
+
+- Force on the sphere versus $\mathrm{d}E/\mathrm{d}z$ of equilibrium states: $\approx2\%$.
+
+- Repeated runs reproduce area, volume and radius to all printed digits (the program contains no randomness).
+
+- Two reference runs (`test/test_reference.py`) -- a sessile drop with global split and collapse, and a quasi-static sphere run with local remeshing and wetting -- reproduce their recorded final energy, area, volume, contact radius, remesh count and force to $10^{-10}$, and bit-identically on the recording machine. They are the standard for refactorings.
+- A run attached to the live window, to the run-file writer or to nothing gives bit-identical results; a run killed and restarted from its last checkpoint ends bit-identically to the uninterrupted run (also in quasi-static mode).
+- The run file opens in VTK's own `vtkHDFReader` (VTK 9.3 and 9.7), which returns exactly the stored frames.
+- The off-screen pipeline is tested for both `remesh_split_mode` values with warnings treated as errors.

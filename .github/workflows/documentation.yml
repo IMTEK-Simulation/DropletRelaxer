@@ -1,0 +1,42 @@
+name: Documentation
+
+on:
+  push:
+    branches: [main]
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: documentation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pdf:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # attach the PDF to releases
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # hatch-vcs needs the tags
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install --upgrade pip
+      # the viewer package is needed for its config docs; its VTK is not imported
+      - run: python -m pip install -e ".[docs]" -e viewer
+      - uses: quarto-dev/quarto-actions/setup@v2
+        with:
+          tinytex: true
+      - run: quarto render docs --to pdf
+        env:
+          QUARTO_PYTHON: python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DropletRelaxer-docs
+          path: docs/_book/*.pdf
+      - if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: docs/_book/*.pdf

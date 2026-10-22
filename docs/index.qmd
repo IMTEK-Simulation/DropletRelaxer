@@ -1,0 +1,41 @@
+# Motivation and Overview {.unnumbered}
+
+
+A liquid droplet on a substrate takes on the shape that
+minimizes its interfacial energy while its volume stays constant (liquid
+is incompressible). Since the liquid/vapor energy is proportional to area, this
+leads to a classical *constrained variational problem*:
+$$
+\min_{\Sigma} \; A[\Sigma] \quad \text{subject to} \quad V[\Sigma] = V_0,
+$$ {#eq-problem}
+where $\Sigma$ is a surface with a boundary curve (the contact line) on
+the substrate, $A[\Sigma]$ is its area, and $V[\Sigma]$ is the enclosed
+volume. Wetting adds energies on the contact area with the substrate and
+with a rigid obstacle (@sec-interfaces).
+
+Kenneth Brakke's Surface Evolver [@Brakke1992] solves exactly this
+problem (and substantially more general variants of it) numerically,
+by discretizing the surface as a triangle mesh and iteratively moving
+the vertices along the negative gradient of the energy -- a discrete
+gradient descent. Our program mirrors the same principle, with two
+improvements over the simplest approach: a Sobolev preconditioning of
+the gradient (@sec-sobolev) and a penalty formulation of
+the volume constraint (@sec-constraint).
+
+**How this document is organized.** *Part I* states the model and derives the mathematics; it
+contains no program names or parameter values and would be valid for any
+implementation. *Part II* states what the program does with it:
+which quantities are computed where, which numerical devices were added
+that are *not* implied by the theory, how the output is produced and
+how it was checked. Cross-references between the parts point from
+each implementation item to the equation it realizes
+(@tbl-mapping collects them). *Part III* compares the approach with the
+Surface Evolver and lists open directions. *Part IV* explains how to run the
+code: installation, the command-line tools, the configuration (with a
+reference of every parameter generated from the code), the run-file format
+and troubleshooting. The appendix is the project's design log with
+measurements behind many of the parameter choices.
+
+The PDF of this document is built by the continuous integration from the
+Quarto sources in `docs/`; executable cells generate the parameter
+reference and the file-format tables from the code, so they cannot drift.

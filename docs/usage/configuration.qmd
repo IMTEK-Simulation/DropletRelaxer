@@ -1,0 +1,42 @@
+# Configuration {#sec-usage-configuration}
+
+All parameters live in dataclasses in `DropletRelaxer.config`, one per TOML
+table: `[mesh]`, `[solver]`, `[obstacle]`, `[output]`, `[anomaly]`,
+`[roughness]`, `[quasi]`. A scenario file sets only what differs from the
+defaults; an empty file is the default scenario.
+
+```toml
+[solver]
+contact_angle_deg = 120.0
+
+[obstacle]
+center_end = [50.0, 0.0, 125.0]
+
+[output]
+every = 200
+
+[viewer]                 # read by droplet-view only
+curvature_clim = [0.0, 4.0]
+```
+
+Rules:
+
+- **Unknown tables and keys are errors**, with a "did you mean" hint, so a
+  typo in a parameter sweep does not silently run the default.
+- **Types are checked.** Arrays become tuples, integers are accepted for floats.
+- **TOML has no `None`.** Optional fields that default to `None`
+  (`roughness.rms_height`, `roughness.q_cutoff`) are `None` when absent.
+  `mesh.target_volume = 0` means "no rescaling".
+- **`--set section.key=value`** is applied after the file; the value is parsed as
+  TOML (a bare word is taken as a string).
+- **Lengths and volume scaling.** The start mesh is rescaled to
+  `mesh.target_volume`; values in absolute length units are rescaled with it
+  (`DropletRelaxer.config.apply_volume_scale`, @sec-meshes). The run file keeps
+  the scenario as given (`config_toml`, used for restarts) and the effective
+  configuration after scaling (`config_effective`).
+- The **`[viewer]` table** belongs to DropletViewer (`DropletViewer.config.ViewerConfig`);
+  the solver only stores it, so a later replay uses the same display settings.
+
+The documentation of every parameter is the docstring below its field in the
+code; @sec-parameters lists them all, and `droplet-relax show-config` prints
+them with the current values.
