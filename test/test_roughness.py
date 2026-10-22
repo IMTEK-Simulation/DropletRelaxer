@@ -135,10 +135,10 @@ def test_surface_free_energy_contains_roughness_term():
     verts, tris, b, mask = scaled_setup(cfg)[:4]
     A = 1.0
     E0 = M.surface_free_energy(cfg, verts, tris, b, A)
-    cfg.roughness_field = make_roughness_field(
+    field = make_roughness_field(
         RoughnessConfig(enabled=True, mode="chemical", rms_kappa=0.1, box_size=400.0), 5.0, KAPPA0)
-    E1 = M.surface_free_energy(cfg, verts, tris, b, A)
-    assert E1 - E0 == pytest.approx(cfg.roughness_field.energy_and_grad(verts, b, cfg.solver.gamma_lv)[0])
+    E1 = M.surface_free_energy(cfg, verts, tris, b, A, roughness=field)
+    assert E1 - E0 == pytest.approx(field.energy_and_grad(verts, b, cfg.solver.gamma_lv)[0])
     assert E1 != E0
 
 
@@ -149,9 +149,9 @@ def test_solver_uses_roughness_term():
     last0, _ = run_solver(cfg, verts, tris, b, mask, V0, 200)
     ring = verts[b, :2]
     edge = float(np.linalg.norm(np.roll(ring, -1, axis=0) - ring, axis=1).mean())
-    cfg.roughness_field = make_roughness_field(
+    field = make_roughness_field(
         RoughnessConfig(enabled=True, mode="chemical", rms_kappa=0.3, box_size=400.0), edge, KAPPA0)
-    last1, diag = run_solver(cfg, verts, tris, b, mask, V0, 200)
+    last1, diag = run_solver(cfg, verts, tris, b, mask, V0, 200, roughness=field)
     v0, v1 = last0[1], last1[1]
     assert np.all(np.isfinite(v1))
     assert np.abs(v1[b, :2] - v0[b, :2]).max() > 1e-3        # the contact line feels the disorder

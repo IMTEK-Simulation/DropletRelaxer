@@ -1,0 +1,17 @@
+# A sessile drop relaxing to its spherical cap on a homogeneous wall (no
+# sphere, no roughness). Converges in a few thousand iterations.
+#
+#     droplet-relax run examples/sessile.toml -o sessile.h5
+
+[solver]
+contact_angle_deg = 120.0
+n_iterations = 20000
+
+[obstacle]
+enabled = false
+
+[roughness]
+enabled = false
+
+[output]
+every = 200

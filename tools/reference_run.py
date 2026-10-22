@@ -9,7 +9,6 @@ force on the sphere). The JSON file holds the final scalars and a SHA-256 of the
 final mesh bytes; regenerate it deliberately, in its own commit, whenever the
 numerics change on purpose.
 """
-import copy
 import hashlib
 import json
 import os
@@ -17,7 +16,7 @@ import sys
 
 import numpy as np
 
-import DropletRelaxer.config as _config
+from DropletRelaxer.config import Config
 from DropletRelaxer.console import ConsoleSink
 from DropletRelaxer.driver import Driver
 
@@ -47,7 +46,7 @@ SCENARIOS = {"sessile": _sessile, "sphere": _sphere}
 
 
 def run(name, sinks=()):
-    cfg = copy.deepcopy(_config.CONFIG)
+    cfg = Config()
     SCENARIOS[name](cfg)
     res = Driver(cfg, sinks=sinks).run()
     h = hashlib.sha256()

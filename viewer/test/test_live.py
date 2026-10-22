@@ -50,3 +50,16 @@ def test_series_arrays():
     assert np.all(np.isnan(s["sphere_center"]))
     assert list(s["iteration"]) == [f.iteration for f in win.frames]
     assert isinstance(win.series, Series)
+
+
+def test_viewer_config_documented_and_strict():
+    from dataclasses import fields
+
+    from DropletRelaxer.config import ConfigError, field_docs
+    from DropletViewer.config import ViewerConfig, from_table
+    docs = field_docs(ViewerConfig)
+    assert all(docs.get(f.name) for f in fields(ViewerConfig))
+    v = from_table({"curvature_clim": [0, 2]}, ["colormap=viridis"])
+    assert v.curvature_clim == (0.0, 2.0) and v.colormap == "viridis"
+    with pytest.raises(ConfigError, match="did you mean"):
+        from_table({"colormp": "x"})

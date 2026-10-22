@@ -1,20 +1,19 @@
 """The driver and its sinks: frames, events, stop requests, and that nothing a
 sink does changes the numerics."""
-import copy
 import subprocess
 import sys
 
 import numpy as np
 import pytest
 
-from DropletRelaxer.config import CONFIG
+from DropletRelaxer.config import Config
 from DropletRelaxer.driver import Driver
 from DropletRelaxer.io import NullSink
 
 
 def short_cfg(n_iterations=430):
     """Sessile drop that remeshes early (global split at 300, collapse at 360)."""
-    cfg = copy.deepcopy(CONFIG)
+    cfg = Config()
     cfg.obstacle.enabled = False
     cfg.roughness.enabled = False
     cfg.quasi.enabled = False

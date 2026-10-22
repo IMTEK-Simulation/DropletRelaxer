@@ -1,5 +1,5 @@
 """
-Development entry point: runs config.CONFIG with the live window.
+Development entry point: runs the default Config() with the live window.
 
     python main.py
 
@@ -10,7 +10,7 @@ DropletViewer.live; this script only wires them together.
 import os
 import time
 
-from DropletRelaxer.config import CONFIG
+from DropletRelaxer.config import Config
 from DropletRelaxer.console import ConsoleSink
 from DropletRelaxer.driver import Driver
 from DropletViewer.config import ViewerConfig
@@ -18,7 +18,7 @@ from DropletViewer.live import LiveWindow
 
 
 def main(cfg=None, vcfg=None):
-    cfg = CONFIG if cfg is None else cfg
+    cfg = Config() if cfg is None else cfg
     save_dir = os.path.join("runs", time.strftime("droplet_run_%Y%m%d_%H%M%S"))
     sinks = [ConsoleSink(), LiveWindow(vcfg if vcfg is not None else ViewerConfig(), save_dir=save_dir)]
     return Driver(cfg, sinks=sinks).run()

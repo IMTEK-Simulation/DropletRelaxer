@@ -20,6 +20,9 @@ dependencies = [
 [project.optional-dependencies]
 test = ["pytest>=8"]
 
+[project.scripts]
+droplet-relax = "DropletRelaxer.cli:main"
+
 [project.urls]
 Repository = "https://github.com/IMTEK-Simulation/DropletRelaxer"
 

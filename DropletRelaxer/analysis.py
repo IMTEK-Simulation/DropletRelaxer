@@ -10,7 +10,7 @@ from .substrate import base_triangle_mask
 from .wetting import compute_wetted_set, patch_solid_angle, wetted_boundary_loop
 
 
-def surface_free_energy(cfg, verts, tris, boundary_idx, A_lv, sphere_center=None, wetted_loop=None):
+def surface_free_energy(cfg, verts, tris, boundary_idx, A_lv, sphere_center=None, wetted_loop=None, roughness=None):
     """Total interface energy of the closed droplet,
 
         E = gamma_lv*A_lv - cos(theta)*gamma_lv*A_sl  [ - cos(theta_s)*gamma_lv*A_sphere ],
@@ -20,7 +20,8 @@ def surface_free_energy(cfg, verts, tris, boundary_idx, A_lv, sphere_center=None
     substrate, A_sphere = R^2 * solid angle of the wetted patch on the
     sphere (only when the sphere is in contact; it vanishes for the default
     sphere angle of 90 deg). Evaluated from the yielded state only, so it is
-    exactly the energy the solver's gradient belongs to."""
+    exactly the energy the solver's gradient belongs to. `roughness`: the
+    run's roughness.RoughnessField, or None."""
     g = cfg.solver.gamma_lv
     E = g * A_lv
     kappa = np.cos(np.radians(cfg.solver.contact_angle_deg))
@@ -34,8 +35,8 @@ def surface_free_energy(cfg, verts, tris, boundary_idx, A_lv, sphere_center=None
             E -= kappa * g * A_sl
     if getattr(cfg, "anomaly", None) is not None and cfg.anomaly.enabled:
         E += anomaly_wall_energy_and_grad(verts, boundary_idx, cfg.anomaly, g, kappa)[0]
-    if getattr(cfg, "roughness_field", None) is not None:
-        E += cfg.roughness_field.energy_and_grad(verts, boundary_idx, g)[0]
+    if roughness is not None:
+        E += roughness.energy_and_grad(verts, boundary_idx, g)[0]
     if (wetted_loop is not None and sphere_center is not None
             and cfg.obstacle.wetting_enabled):
         ks = np.cos(np.radians(cfg.obstacle.wetting_contact_angle_deg))

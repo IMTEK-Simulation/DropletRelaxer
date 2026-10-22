@@ -1,18 +1,16 @@
 """Helpers for the slow tests: set up the same scaled problem as main.py and
 run the solver on a FIXED mesh (no remeshing) so that results are repeatable."""
-import copy
 
 import numpy as np
 
-import DropletRelaxer.config as _config
-from DropletRelaxer.config import apply_volume_scale
+from DropletRelaxer.config import Config, apply_volume_scale
 from DropletRelaxer.energy import volume_and_grad
 from DropletRelaxer.mesh import make_start_mesh, build_dof_mask, resolve_volume_scale
 from DropletRelaxer.solver import relax
 
 
 def fresh_config():
-    return copy.deepcopy(_config.CONFIG)
+    return Config()
 
 
 def scaled_setup(cfg):
@@ -27,14 +25,14 @@ def scaled_setup(cfg):
     return verts, tris, bidx, mask, V0
 
 
-def run_solver(cfg, verts, tris, bidx, mask, V0, n_iter, start_iter=0, diag=None):
+def run_solver(cfg, verts, tris, bidx, mask, V0, n_iter, start_iter=0, diag=None, roughness=None):
     """Runs relax() for `n_iter` iterations of a run of cfg.solver.n_iterations,
     returns the last yielded tuple and the diag dict."""
     diag = {} if diag is None else diag
     last = None
     for out in relax(verts.copy(), tris, bidx, mask, cfg.solver, cfg.obstacle, start_iter=start_iter,
                      stop_iter=start_iter + n_iter, V_target=V0, diag=diag, anomaly_cfg=cfg.anomaly,
-                     roughness=getattr(cfg, "roughness_field", None)):
+                     roughness=roughness):
         last = out
     return last, diag
 

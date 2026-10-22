@@ -45,6 +45,7 @@ class Driver:
         self._last_frame_iter = None
         self._table = []          # small per-frame records for the quasi-static console table
         self._topo_cache = {}     # epoch -> read-only (tris, boundary_idx)
+        self.roughness_field = None
 
     # -- sink fan-out -------------------------------------------------------
 
@@ -66,7 +67,7 @@ class Driver:
 
     def _emit_frame(self, i, v, tris, boundary_idx, A, V, sphere_center, wetted_loop, epoch, diag, quasi):
         cfg = self.cfg
-        energy = surface_free_energy(cfg, v, tris, boundary_idx, A, sphere_center, wetted_loop)
+        energy = surface_free_energy(cfg, v, tris, boundary_idx, A, sphere_center, wetted_loop, self.roughness_field)
         force = np.array(diag.get("force", np.zeros(3)), dtype=float)
         com = center_of_mass(v, tris)
         x = float(sphere_center[0]) if (quasi is not None and sphere_center is not None) else float(i)
@@ -115,9 +116,10 @@ class Driver:
         cfg = self.cfg
         solver_gen = relax(verts, tris, boundary_idx, mask, cfg.solver, cfg.obstacle,
                            start_iter=start_iter, stop_iter=total_iters, V_target=V0, diag=diag,
-                           anomaly_cfg=cfg.anomaly, roughness=cfg.roughness_field, quasi=quasi)
+                           anomaly_cfg=cfg.anomaly, roughness=self.roughness_field, quasi=quasi)
         if quasi is not None:
-            quasi.energy_fn = lambda v_, A_, c_, w_: surface_free_energy(cfg, v_, tris, boundary_idx, A_, c_, w_)
+            quasi.energy_fn = lambda v_, A_, c_, w_: surface_free_energy(cfg, v_, tris, boundary_idx, A_, c_, w_,
+                                                                          self.roughness_field)
         # The remesh triggers look at the free liquid/vapor surface (the dome)
         # only; the flat base on the substrate (substrate.py) is rebuilt from
         # the contact-line ring after every remesh and never triggers one.
@@ -230,11 +232,11 @@ class Driver:
         if cfg.roughness.enabled:
             _ring = verts[boundary_idx, :2]
             _edge = float(np.linalg.norm(np.roll(_ring, -1, axis=0) - _ring, axis=1).mean())
-            cfg.roughness_field = make_roughness_field(
+            self.roughness_field = make_roughness_field(
                 cfg.roughness, _edge, math.cos(math.radians(cfg.solver.contact_angle_deg)))
             self._log("Substrate roughness:")
-            self._log("  " + cfg.roughness_field.describe().replace("\n", "\n  "))
-            self._log("  " + cfg.roughness_field.check_resolution(verts, boundary_idx))
+            self._log("  " + self.roughness_field.describe().replace("\n", "\n  "))
+            self._log("  " + self.roughness_field.check_resolution(verts, boundary_idx))
         # Reference edge-length scale for the remesh triggers (see
         # MeshConfig.remesh_trigger_ratio / remesh_min_edge_ratio) --
         # computed once, from the ORIGINAL mesh, so it doesn't shift as the
@@ -257,7 +259,7 @@ class Driver:
         self.run_info = RunInfo(config=cfg, mesh_scale=float(mesh_scale), V0=float(V0), A0=A0,
                                 verts=readonly(verts), tris=readonly(tris), boundary_idx=readonly(boundary_idx),
                                 total_iters=int(total_iters), quasi_static=bool(use_quasi),
-                                roughness_field=cfg.roughness_field, stop=self.stop)
+                                roughness_field=self.roughness_field, stop=self.stop)
         for s in self.sinks:
             s.start(self.run_info)
 
@@ -475,7 +477,8 @@ class Driver:
 
         summary = {
             "iteration": int(i),
-            "energy": surface_free_energy(cfg, verts_final, tris_last, boundary_last, Af, c_fin, loop_fin),
+            "energy": surface_free_energy(cfg, verts_final, tris_last, boundary_last, Af, c_fin, loop_fin,
+                                          self.roughness_field),
             "area": float(Af), "volume": float(Vf), "contact_radius": float(rf), "remeshes": int(epoch),
             "verts": verts_final, "tris": tris_last, "boundary_idx": boundary_last,
             "force": None if quasi is None or quasi.prev_F is None else quasi.prev_F.tolist(),
