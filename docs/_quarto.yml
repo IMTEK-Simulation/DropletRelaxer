@@ -1,0 +1,65 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "DropletRelaxer"
+  subtitle: "Mathematical background, implementation and usage"
+  author: "IMTEK Simulation"
+  date: today
+  repo-url: https://github.com/IMTEK-Simulation/DropletRelaxer
+  chapters:
+    - index.qmd
+    - part: "Theory"
+      chapters:
+        - theory/continuous.qmd
+        - theory/interfaces.qmd
+        - theory/discretization.qmd
+        - theory/constraints.qmd
+    - part: "Implementation"
+      chapters:
+        - implementation/structure.qmd
+        - implementation/meshes.qmd
+        - implementation/assembly.qmd
+        - implementation/iteration.qmd
+        - implementation/remeshing.qmd
+        - implementation/output.qmd
+        - implementation/verification.qmd
+        - implementation/mapping.qmd
+    - part: "Comparison and Outlook"
+      chapters:
+        - outlook/evolver.qmd
+        - outlook/outlook.qmd
+    - part: "Using the Code"
+      chapters:
+        - usage/getting-started.qmd
+        - usage/configuration.qmd
+        - usage/parameters.qmd
+        - usage/file-format.qmd
+        - usage/troubleshooting.qmd
+    - references.qmd
+  appendices:
+    - appendix/notes.qmd
+
+bibliography: references.bib
+
+execute:
+  echo: false
+  freeze: false
+
+crossref:
+  eq-prefix: "Eq."
+
+format:
+  pdf:
+    documentclass: scrreprt
+    papersize: a4
+    toc: true
+    number-sections: true
+    colorlinks: true
+    default-image-extension: pdf
+  html:
+    theme: cosmo
+    number-sections: true
+    default-image-extension: png
+    html-math-method: mathjax

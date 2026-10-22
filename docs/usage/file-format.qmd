@@ -1,0 +1,67 @@
+# The Run File {#sec-file-format}
+
+A run is one HDF5 file. Its geometry follows VTK's **VTKHDF** layout for
+temporal `PolyData`, so ParaView and VTK ≥ 9.3 (`vtkHDFReader`, and with it
+PyVista) open it directly: every recorded frame is one time step, and the
+number of points and triangles may change from step to step (remeshing).
+Everything else lives in the sibling group `/DropletRelaxer`, which VTK
+ignores. The file is written with plain `h5py`; no VTK is needed on the
+machine that runs the solver.
+
+```{python}
+#| echo: false
+#| output: asis
+from DropletRelaxer.io import schema
+
+print("```text")
+print(schema.__doc__.split("\n\n", 1)[1].rstrip())
+print("```\n")
+print(f"Current format: `format_version = {schema.FORMAT_VERSION}`, "
+      f"VTKHDF version {'.'.join(map(str, schema.VTKHDF_VERSION))}.\n")
+```
+
+## Per-frame arrays
+
+Generated from `DropletRelaxer.io.schema`, which the writer, the reader and
+the tests share.
+
+```{python}
+#| echo: false
+#| output: asis
+from DropletRelaxer.io import schema
+
+print(schema.markdown_table())
+```
+
+## Writing and reading while a run is in progress
+
+All datasets are chunked and resizable and are created when the run starts;
+then the file switches to HDF5 SWMR (single writer, multiple readers) mode. A
+frame is appended data first; `Steps/Values` and the `Steps/NSteps` attribute
+are updated last, and readers count frames by them, so they never see a
+half-written frame. `DropletRelaxer.io.reader.RunFile` with `follow=True`
+(what `droplet-view --follow` uses) refreshes and picks up new frames.
+
+The file is written in the HDF5 1.10 format, the oldest that supports SWMR,
+so that the HDF5 library bundled with VTK can read it.
+
+## Restart checkpoints
+
+`/DropletRelaxer/checkpoint` has two slots. The writer fills the slot that is
+not current and switches the `current` attribute only afterwards, so a run
+killed while writing a checkpoint still has the previous one. A checkpoint
+holds the mesh and the complete loop state of the driver (remesh bookkeeping,
+quasi-static controller), which is why a restart is bit-identical to an
+uninterrupted run. On restart, frames and events recorded after the
+checkpoint are dropped and written again.
+
+## Reading a run file in Python
+
+```python
+from DropletRelaxer.io.reader import RunFile
+
+with RunFile("run.h5") as rf:
+    s = rf.series()                 # per-frame scalars as arrays: energy, force (N, 3), ...
+    last = rf.frame(-1)             # a Frame: verts, tris, boundary_idx, curvature, ...
+    cfg, table = rf.config()        # the scenario as given
+```

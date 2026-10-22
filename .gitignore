@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+venv/
+.venv/
+runs/
+*.h5
+*.mp4
+*.gif
+docs/_book/
+docs/.quarto/
+build/
+dist/
+*.egg-info/
+_version.py

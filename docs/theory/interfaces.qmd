@@ -1,0 +1,169 @@
+# Interfacial Energies and Wetting {#sec-interfaces}
+
+
+This section states the physical energies that go beyond the pure area
+functional: the wall (liquid/solid) energy, a substrate whose wettability
+varies in space, the energy of the liquid in contact with a rigid sphere,
+and the force the liquid exerts on that sphere. All of it is
+formulated for smooth surfaces; the discrete counterparts follow in
+@sec-discrete-contact.
+
+## Young's Energy and the Wall Energy {#sec-wall-energy}
+
+Let the liquid be bounded by a liquid/vapor surface $\Sigma_{lv}$
+(area $A_{lv}$) and a wetted region of the substrate (liquid/solid
+interface, area $A_{sl}$). With the three interfacial tensions
+$\gamma_{lv},\gamma_{sl},\gamma_{sv}$ and a substrate of total area
+$A_{\mathrm{wall}}$ (a constant),
+$$
+E = \gamma_{lv}A_{lv} + \gamma_{sl}A_{sl} + \gamma_{sv}(A_{\mathrm{wall}}-A_{sl})
+  = \gamma_{lv}A_{lv} - (\gamma_{sv}-\gamma_{sl})A_{sl} + \mathrm{const}.
+$$
+Moving the contact line outward by $\delta$ per unit length changes
+$A_{sl}$ by $+\delta$ and, for a liquid/vapor surface meeting the wall at
+the interior angle $\theta$, $A_{lv}$ by $\cos\theta\,\delta$, so
+stationarity gives *Young's equation*
+$$
+\gamma_{sv}-\gamma_{sl} = \gamma_{lv}\cos\theta_Y .
+$$ {#eq-young}
+Writing $\kappa:=\cos\theta_Y$, the total interface energy is therefore
+$$
+E \;=\; \gamma_{lv}A_{lv} \;-\; \kappa\,\gamma_{lv}\,A_{sl}.
+$$ {#eq-total-energy}
+A positive $\kappa$ (more wetting, $\theta_Y<90^\circ$) *rewards* a
+larger wetted area; $\kappa=0$ ($\theta_Y=90^\circ$) means no wall
+energy at all. For the pure area problem of
+@sec-continuous-problem we set $\gamma_{lv}=1$: a constant
+factor does not change the minimizer. The wall part alone is
+$$
+E_{\mathrm{wall}} = -\kappa\,\gamma_{lv}\, A_{\mathrm{proj}},
+$$ {#eq-wall-energy}
+where $A_{\mathrm{proj}}=A_{sl}$ is the area enclosed by the contact line's
+projection onto the (flat) substrate plane. By Green's theorem this
+area is a closed line integral over the contact line $\partial\Sigma$ --
+the planar analogue of the divergence-theorem trick used for the
+volume (@sec-discrete-volume):
+$$
+A_{\mathrm{proj}} = \frac{1}{2}\oint_{\partial\Sigma} (x\,\mathrm{d}y - y\,\mathrm{d}x).
+$$ {#eq-green}
+Consequently the wall energy needs no substrate surface mesh at all: it
+depends only on the contact line.
+
+## A Substrate with Spatially Varying Wettability {#sec-anomaly-theory}
+
+If the Young angle varies over the substrate, $\kappa=\kappa(x,y)$,
+the wall energy generalizes to an integral over the wetted region
+$\Omega_{\mathrm{wet}}$ (the region of the plane enclosed by the contact
+line):
+$$
+E_{\mathrm{wall}} = -\gamma_{lv}\int_{\Omega_{\mathrm{wet}}}\kappa(x,y)\,\mathrm{d}A .
+$$ {#eq-wall-heterogeneous}
+Consider a homogeneous wall ($\kappa_0=\cos\theta_0$) with a circular
+anomaly of centre $\mathbf p$, radius $r$ and angle $\theta_a$
+($\kappa_a=\cos\theta_a$). With a smooth indicator $s(\rho)$ of the disc,
+$\rho=|\mathbf x-\mathbf p|$, $\kappa=\kappa_0+(\kappa_a-\kappa_0)\,s$, and the
+energy splits into the homogeneous part @eq-wall-energy and
+$$
+E_{\mathrm{anom}} = -\gamma_{lv}(\kappa_a-\kappa_0)\int_{\Omega_{\mathrm{wet}}} s(\rho)\,\mathrm{d}A .
+$$ {#eq-anomaly-energy}
+The indicator is $s=1$ for $\rho\le r-h$, $s=0$ for $\rho\ge r+h$ and, in the
+transition zone of total width $2h$, the quintic "smootherstep"
+$$
+s = 1-(10u^3-15u^4+6u^5),\qquad u=\frac{\rho-(r-h)}{2h}\in[0,1],
+$$ {#eq-smootherstep}
+which is $C^2$ (so $E_{\mathrm{anom}}$ has a continuous second derivative
+with respect to the contact line). The width is parametrized as
+$2h=f\,r$ with a fraction $f$ of the radius.
+
+**Reduction to a contact-line integral.** Since $s$ is radial, the
+area integral can again be written as a boundary integral. Let
+$S(\rho)=\int_0^\rho s(r')\,r'\,\mathrm{d}r'$ (a polynomial on the transition zone,
+closed form) and define the vector field
+$$
+\mathbf P(\mathbf x)=\frac{S(\rho)}{\rho^2}\,(\mathbf x-\mathbf p).
+$$ {#eq-flux-field}
+Its divergence is $\operatorname{div}\mathbf P=\frac1\rho\frac{\mathrm{d}}{\mathrm{d}\rho}\big(\rho\cdot S/\rho\big)
+=S'(\rho)/\rho=s(\rho)$, hence by the divergence theorem
+$$
+\int_{\Omega_{\mathrm{wet}}} s\,\mathrm{d}A=\oint_{\partial\Sigma}\mathbf P\cdot\mathbf n\,\mathrm{d}l,
+$$ {#eq-anomaly-flux}
+with $\mathbf n$ the outward normal of the contact line in the plane.
+(At $\rho\to0$, $\mathbf P\to(\mathbf x-\mathbf p)/2$, so the field is regular.)
+The first variation of this boundary integral under a displacement
+$\delta\mathbf x$ of the contact line is
+$$
+\delta\!\int_{\Omega_{\mathrm{wet}}} s\,\mathrm{d}A=\oint_{\partial\Sigma} s\,(\mathbf n\cdot\delta\mathbf x)\,\mathrm{d}l,
+$$ {#eq-anomaly-variation}
+that is, the local Young force $-\gamma_{lv}\kappa(\mathbf x)\,\mathbf n$ at each
+point of the contact line, now with the local wettability $\kappa(\mathbf x)$.
+
+**Consequences.** \(i\) A patch lying completely *inside* the
+wetted region has no effect: only the part of the wetted region that the contact
+line sweeps over contributes to a change of the energy. (ii) For a hydrophilic
+patch ($\theta_a<\theta_0$) the energy as a function of the droplet position has
+a well of depth about $\gamma_{lv}(\kappa_a-\kappa_0)A_{\mathrm{covered}}$, for a
+hydrophobic one a hill of that height. (iii) The model has no contact-angle
+hysteresis: pinning at the patch edge arises only from this energy barrier.
+
+## Wetting Energy on a Rigid Sphere {#sec-sphere-wetting-theory}
+
+The same Young-type energy applies where the liquid touches a rigid sphere
+of radius $R$ and centre $\mathbf c$: the wetted part of the sphere
+(liquid/solid interface, area $A_{\mathrm{patch}}$) lowers or raises the energy,
+$$
+E_{\mathrm{wetting}} = -\kappa_{\mathrm{sphere}}\,\gamma_{lv}\,A_{\mathrm{patch}},
+  \qquad \kappa_{\mathrm{sphere}}=\cos\theta_{Y,\mathrm{sphere}},
+$$ {#eq-sphere-wetting-energy-cont}
+and the liquid/vapor area excludes the wetted facets. Unlike the plane,
+a sphere has no simple global vector potential for its area form, so the
+trick of @eq-green does not carry over directly -- an arbitrarily
+oriented loop on a sphere is exactly the setting of the holonomy term in the
+Gauss--Bonnet theorem. The way out is to use Gauss--Bonnet itself: for a
+simple loop $\gamma$ on the unit sphere bounding a region $D$,
+$\int_D K\,\mathrm{d}A = 2\pi-\oint_\gamma\kappa_g\,\mathrm{d}s$ with $K=1$, i.e. the
+*solid angle* enclosed by the loop is
+$$
+\Omega = 2\pi-\oint_\gamma \kappa_g\,\mathrm{d}s ,
+  \qquad A_{\mathrm{patch}}=R^2\,\Omega ,
+$$ {#eq-gauss-bonnet}
+which refers only to the loop itself (its geodesic curvature), not to any global
+potential or preferred direction. The price is that "the enclosed side" must be
+unambiguous, i.e. the loop must be small enough (it must not wrap around the
+sphere) and must be a single simple loop.
+
+## The Force on the Sphere {#sec-force-theory}
+
+For a quasi-static process the force of the liquid on the sphere follows
+from virtual work, $\mathbf F=-\partial E/\partial\mathbf c$: the energy
+change per displacement of the sphere centre. The configuration of the
+liquid depends on $\mathbf c$ as well, but at equilibrium the liquid
+minimizes $E$ for each $\mathbf c$, so by the envelope argument only the
+*explicit* dependence of $E$ on $\mathbf c$ is needed, namely
+(i) the contact/collision terms and the Young term on the sphere patch,
+which depend on $\mathbf v-\mathbf c$, and (ii) the reaction of the
+constraint that holds the wetted liquid on the sphere surface, which carries
+the liquid pressure on the patch and the radial pull of the contact line.
+Out of equilibrium the same expression is the instantaneous force the
+current liquid configuration exerts on the sphere (force balance).
+
+**Symmetry.** On a homogeneous substrate the whole system is invariant
+under lateral translations of sphere and droplet together, so the equilibrium
+energy $E^*(\mathbf c)$ does not depend on the lateral position and
+$F_x=F_y=0$ at equilibrium. A *lateral* force at equilibrium requires
+a symmetry-breaking substrate: with a wettability anomaly
+(@sec-anomaly-theory) $E^*(X)$ has a well or hill and
+$F_x=-\mathrm{d}E^*/\mathrm{d}X$. What a moving sphere in a real liquid experiences as
+friction additionally contains viscous dissipation and contact-angle
+hysteresis, neither of which is in this energy model.
+
+## Centre of Mass
+
+For a closed liquid surface the centroid of the enclosed (homogeneous) liquid is,
+by the divergence theorem applied componentwise,
+$$
+\mathbf r_{\mathrm{COM}}=\frac{1}{V}\int_{\mathrm{liquid}}\mathbf x\,\mathrm{d}V,
+$$ {#eq-com}
+which the discrete formula of @sec-discrete-com evaluates from the
+boundary alone. The offset of the centre of mass from the sphere centre in the
+substrate plane, $(d_x,d_y)=\mathbf r^{\mathrm{COM}}_{xy}-\mathbf c_{xy}$, $d=\sqrt{d_x^2+d_y^2}$, is
+a convenient measure of how far the droplet lags behind or leads the sphere.

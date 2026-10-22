@@ -1,0 +1,262 @@
+# Discretization: The Surface as a Simplicial Complex {#sec-discretization}
+
+
+## Notation
+
+We replace the smooth surface $\Sigma$ with a triangle mesh: a set of
+vertices $\{v_i\}_{i=1}^{N} \subset \mathbb{R}^3$ and a set of triangles
+(facets) $T$, where each triangle $t \in T$ is given by an ordered
+triple $(i,j,k)$ of vertex indices. This piecewise-linear surface is
+exactly the *simplicial complex* that the Surface Evolver also
+uses as its data structure.
+
+![A triangle $t=(i,j,k)$ with edge vectors and unit normal $\hat N$. The triangle's area and its gradient with respect to each vertex are derived in @sec-area-gradient.](triangle){#fig-triangle width=45%}
+
+## The Discrete Area Functional
+
+For a triangle $t=(i,j,k)$ we define the (unnormalized) normal vector
+$$
+N_t \;=\; (v_j - v_i) \times (v_k - v_i),
+  \qquad
+  \hat N_t = \frac{N_t}{|N_t|},
+$$
+so that its area is $\mathrm{Area}_t = \tfrac{1}{2}|N_t|$. The
+discrete area functional is the sum over all triangles:
+$$
+A(x) \;=\; \sum_{t \in T} \mathrm{Area}_t
+  \;=\; \frac{1}{2}\sum_{t=(i,j,k) \in T} \big|(v_j-v_i)\times(v_k-v_i)\big|,
+$$ {#eq-discrete-area}
+where $x = (v_1,\dots,v_N) \in \mathbb{R}^{3N}$ is the vector of all vertex
+coordinates.
+
+## Derivation of the Area Gradient {#sec-area-gradient}
+
+We compute $\nabla_{v_i} \mathrm{Area}_t$ for a fixed triangle
+$t=(i,j,k)$. With $a := v_j,\, b:= v_k$ held constant and $x := v_i$
+the variable, we have $N_t(x) = (a-x)\times(b-x)$. The directional
+derivative in direction $h$ is
+$$
+\begin{aligned}
+  \mathrm{d}N_t[h]
+  &= (-h)\times(b-x) + (a-x)\times(-h) \notag\\
+  &= (b-x)\times h - (a-x)\times h \notag\\
+  &= \big[(b-x)-(a-x)\big]\times h
+  \;=\; (b-a)\times h.
+\end{aligned}
+$$ {#eq-dN}
+Since $\mathrm{Area}_t = \tfrac12 |N_t|$ and $\mathrm{d}|N_t|[h] = \hat N_t
+\cdot \mathrm{d}N_t[h]$ (the derivative of a norm is the projection onto
+the unit direction), @eq-dN gives
+$$
+\mathrm{d}\mathrm{Area}_t[h]
+  = \tfrac12\, \hat N_t \cdot \big[(b-a)\times h\big]
+  = \tfrac12\, h \cdot \big[\hat N_t \times (b-a)\big],
+$$
+where we used the cyclic invariance of the scalar triple product
+$u\cdot(v\times w) = w\cdot(u\times v)$. Since the directional
+derivative is exactly $h \cdot \nabla_{v_i}\mathrm{Area}_t$, we can read
+off the gradient directly:
+$$
+\boxed{\;
+  \nabla_{v_i} \mathrm{Area}_t
+  \;=\; \tfrac12\, \hat N_t \times (v_k - v_j)
+  \;=\; \tfrac12\,(v_j - v_k)\times \hat N_t
+  \;}
+$$ {#eq-area-grad-vi}
+By cyclically permuting the roles of $i,j,k$ (the triangle is
+symmetric under cyclic relabeling), we immediately obtain
+$$
+\nabla_{v_j} \mathrm{Area}_t = \tfrac12(v_k-v_i)\times \hat N_t,
+  \qquad
+  \nabla_{v_k} \mathrm{Area}_t = \tfrac12(v_i-v_j)\times \hat N_t.
+$$ {#eq-area-grad-vjvk}
+The total gradient of $A(x)$ with respect to a vertex $v_i$ is the sum
+of @eq-area-grad-vi--@eq-area-grad-vjvk over all
+triangles containing $v_i$ (the so-called \"1-ring\" around $v_i$).
+
+## The Discrete Volume Functional {#sec-discrete-volume}
+
+For a closed surface, the divergence theorem with the vector field
+$F(x) = x/3$ (which satisfies $\mathrm{div}\,F \equiv 1$) gives
+$$
+V = \int_{\mathrm{volume}} 1 \,\mathrm{d}V
+  = \int_{\Sigma} \tfrac13\, x\cdot n \;\mathrm{d}A.
+$$
+On a triangle $t=(i,j,k)$ (with matching orientation), this surface
+integral reduces to the well-known tetrahedron volume relative to the
+origin:
+$$
+V_t = \tfrac16\, v_i \cdot (v_j \times v_k),
+$$
+and the total volume is the sum
+$$
+V(x) = \frac16 \sum_{t=(i,j,k)\in T} v_i \cdot (v_j\times v_k).
+$$ {#eq-discrete-volume}
+For a *closed* surface, this value is independent of the choice
+of origin (the contributions of the \"missing\" opposite side cancel out
+telescopically). In our case (an open surface above a substrate plane
+$z=0$ passing through the origin), $x\cdot n = 0$ holds for every
+point on the substrate -- the \"cap\" contributes exactly zero to the
+sum @eq-discrete-volume, which is why we can compute the volume
+using only the free (upper) droplet surface, without explicitly
+triangulating the substrate cap.
+
+## Derivation of the Volume Gradient
+
+@eq-discrete-volume is linear in each individual
+vertex (with the other two held fixed), so the derivative is
+immediate:
+$$
+\frac{\partial}{\partial v_i}\big[v_i\cdot(v_j\times v_k)\big]
+  = v_j \times v_k.
+$$
+For the derivatives with respect to $v_j$ and $v_k$, we again use the
+cyclic symmetry of the scalar triple product,
+$v_i\cdot(v_j\times v_k) = v_j\cdot(v_k\times v_i) = v_k\cdot(v_i\times v_j)$,
+and obtain
+$$
+\boxed{\;
+  \nabla_{v_i} V_t = \tfrac16\, v_j\times v_k, \qquad
+  \nabla_{v_j} V_t = \tfrac16\, v_k\times v_i, \qquad
+  \nabla_{v_k} V_t = \tfrac16\, v_i\times v_j.
+  \;}
+$$ {#eq-volume-grad}
+
+## Connection to Discrete Mean Curvature {#sec-mean-curvature}
+
+A well-known result of discrete differential geometry [@Meyer2003]
+states that the area gradient at a vertex is proportional to the mean
+curvature vector:
+$$
+\nabla_{v_i} A \;\approx\; 2\,H(v_i)\, n(v_i)\, A_{\mathrm{mixed}}(v_i),
+$$ {#eq-curvature-from-gradient}
+where $A_{\mathrm{mixed}}(v_i)$ is a suitable \"mixed\"
+(Voronoi-like) area assigned to the vertex. This is consistent with
+@eq-area-gradient-continuous: the continuous gradient $-Hn$
+reappears discretely as a weighted mean curvature vector. We
+pragmatically approximate $A_{\mathrm{mixed}}(v_i)$ as one third of
+the sum of the adjacent triangle areas (instead of the exact Voronoi
+cell) and obtain from it the *unsigned* curvature
+$$
+H(v_i) \;\approx\; \frac{|\nabla_{v_i} A|}{2\,A_{\mathrm{mixed}}(v_i)},
+$$
+which is used to colour the surface in the visualization -- without having to implement a
+separate curvature operator.
+
+**A boundary caveat.** Relation
+@eq-curvature-from-gradient assumes a *complete* triangle
+fan around $v_i$ and is only exact for interior vertices. At a
+boundary vertex (a point on the contact line), the fan is incomplete,
+and the raw area gradient there picks up an additional contribution
+related to the geodesic curvature of the boundary curve itself --
+unrelated to the true surface curvature $H$. Numerically, this
+contribution can be an order of magnitude larger than the genuine
+curvature signal (in a typical run, boundary vertices show apparent
+curvatures around $60$--$70$ versus a true local value near $0.5$),
+which saturates the color scale and produces a spuriously bright rim
+in the visualization. The program corrects for this by
+replacing each boundary vertex's displayed curvature with the average
+of its interior neighbors' values; this is a purely
+cosmetic fix for the color map and does not affect the optimization
+itself, which never uses @eq-curvature-from-gradient directly
+(it works with the exact area/volume gradients of
+@sec-area-gradient).
+
+## Discrete Contact-Line Energies {#sec-discrete-contact}
+
+This subsection gives the discrete counterparts of the energies of
+@sec-interfaces. The contact line is the ordered closed polygon
+$p_1,\dots,p_n$ of dome vertices on the substrate (for the wall) or on
+the sphere (for the wetted patch).
+
+**Wall energy: shoelace formula.** The wetted substrate area is the
+area of the planar polygon given by the $(x,y)$ coordinates of the contact line,
+$$
+A_{sl}=A_{\mathrm{proj}}=\frac12\sum_{i}\big(x_i y_{i+1}-x_{i+1}y_i\big),
+$$ {#eq-shoelace}
+($i$ cyclic; the planar analogue of @eq-green). Every other term of the sum is
+independent of vertex $i$ except the two containing its neighbours, so
+$$
+\frac{\partial A_{\mathrm{proj}}}{\partial x_i}=\tfrac12(y_{i+1}-y_{i-1}),
+  \qquad
+  \frac{\partial A_{\mathrm{proj}}}{\partial y_i}=\tfrac12(x_{i-1}-x_{i+1}),
+$$ {#eq-shoelace-grad}
+and $\nabla_{p_i}E_{\mathrm{wall}}=-\gamma_{lv}\cos\theta_Y\,(\partial_{x_i}A_{\mathrm{proj}},\partial_{y_i}A_{\mathrm{proj}},0)$ is
+tangential to the substrate. The same area is obtained by closing the
+surface with a flat *base* triangulation $T_{\mathrm{base}}$ of the polygon
+and summing its signed triangle areas (the sign is taken with respect to the
+$-z$ orientation of the base). The tetrahedra spanned by base triangles and the
+origin, which lies in the plane of the base, have zero volume, so the base does not change
+the volume @eq-discrete-volume. The energy of the closed mesh is therefore
+a sum of per-triangle weights $w_t$ times triangle area,
+$$
+E=\sum_{t\in T_{\mathrm{dome}}}w_t\,\mathrm{Area}_t
+   +\sum_{t\in T_{\mathrm{base}}}\big(-\gamma_{lv}\cos\theta_Y\big)\,\mathrm{Area}^{\pm}_t,
+  \qquad w_t=\begin{cases}\gamma_{lv}&\text{free dome triangle,}\\ 0&\text{wetted by the sphere,}\end{cases}
+$$ {#eq-weighted-energy}
+which equals @eq-total-energy exactly, since $\sum_{T_{\mathrm{base}}}\mathrm{Area}^\pm_t=A_{\mathrm{proj}}$
+for any triangulation of the polygon, folded or not. The gradient of
+@eq-weighted-energy is the area gradient
+@eq-area-grad-vi--@eq-area-grad-vjvk with each triangle's contribution multiplied by its weight.
+
+**Heterogeneous wall: polygon flux.** Let the contact polygon be $P$ and
+let $\mathbf F$ be the field of @eq-flux-field with $\operatorname{div}\mathbf F=s$.
+By the divergence theorem, $\int_P s\,\mathrm{d}A=\oint_{\partial P}\mathbf F\cdot\mathbf n\,\mathrm{d}l$; on each straight
+edge $e=[p_a,p_b]$ the integrand is smooth (piecewise polynomial in the edge parameter divided by $\rho$), and
+$$
+\int_P s\,\mathrm{d}A=\sum_{e}\int_e\mathbf F\cdot\mathbf n_e\,\mathrm{d}l\;\approx\;\sum_e\sum_{q=1}^{Q}w_q\,\mathbf F(\xi_q)\cdot\mathbf n_e\,|e|,
+$$ {#eq-anomaly-quad}
+with Gauss--Legendre nodes $\xi_q$ and weights $w_q$ on the edge; the number of nodes $Q$ must resolve the
+transition layer of $s$ relative to the edge length. The exact first variation
+@eq-anomaly-variation is discretized with the same quadrature and the piecewise linear
+hat function $\varphi_a$ of vertex $a$ on the adjacent edges:
+$$
+\frac{\partial E_{\mathrm{anom}}}{\partial \mathbf p_a}
+  =-\gamma_{lv}(\kappa_a-\kappa_0)\sum_{e\ni a}\sum_q w_q\,s(\rho(\xi_q))\,\varphi_a(\xi_q)\,\mathbf n_e|e|.
+$$ {#eq-anomaly-discrete-grad}
+Only contact-line vertices carry a gradient. For a polygon fully inside the disc ($s\equiv1$) the quadrature
+reproduces $\partial A_{\mathrm{proj}}/\partial\mathbf p_a$, i.e. it is consistent with @eq-shoelace-grad,
+and for a polygon not touching the disc both vanish.
+
+**Sphere wetting: solid angle by turning angles.** For the loop of unit vectors
+$u_j=(p_j-\mathbf c)/R$ of the wetted-patch boundary on the sphere, the enclosed
+solid angle follows from the discrete Gauss--Bonnet formula in terms of the
+turning angles $\tau_j$ (the signed angle in the tangent plane at $u_j$ between the incoming and
+the outgoing edge of the loop),
+$$
+\Omega=2\pi-\sum_{j=1}^n\tau_j,\qquad A_{\mathrm{patch}}=R^2\,\Omega,
+$$ {#eq-solid-angle}
+which is a discrete form of @eq-gauss-bonnet for geodesic edges. The energy is
+$$
+E_{\mathrm{wetting}}=-\gamma_{lv}\cos\theta_s\,R^2\Big(2\pi-\sum_j\tau_j\Big).
+$$ {#eq-sphere-wetting-energy}
+It is built from angle differences only, so it has no preferred direction on the sphere (no branch cut),
+at the price that "the enclosed side" is unambiguous only for a loop
+that is small compared with the sphere. A single $\tau_j$ depends only on the three vertices $j-1,j,j+1$,
+which is exploited when differentiating numerically (@sec-sphere-wetting).
+
+**Force on the sphere, discrete.** Differentiating the discrete energy with respect to $\mathbf c$ at fixed
+vertex positions, and accounting for the constraint that holds wetted vertices on the sphere, gives with
+$\mathbf g^{\mathrm{coll}}_i$ the collision gradient (@sec-constraint-sphere),
+$\mathbf g^{\mathrm{Young}}_i$ the gradient of @eq-sphere-wetting-energy with respect to $\mathbf c$ distributed over the loop vertices,
+$\mathbf n_i=(v_i-\mathbf c)/|v_i-\mathbf c|$ and $\mathbf g^{E}_i$ the total gradient of the rest of the energy at vertex $i$:
+$$
+\mathbf F=\sum_i\mathbf g^{\mathrm{coll}}_i
+  +\sum_{i\in\mathrm{wet}}\mathbf g^{\mathrm{Young}}_i
+  -\sum_{i\in\mathrm{wet}}\big(\mathbf g^E_i\!\cdot\!\mathbf n_i\big)\mathbf n_i .
+$$ {#eq-force-discrete}
+The first term is the push of liquid that tries to penetrate the sphere, the second is the Young term of the patch
+boundary, the third is the radial part of the energy gradient on wetted vertices, which the constraint absorbs
+(liquid pressure on the patch plus the radial pull of the contact line). @eq-force-discrete needs no finite differences with respect
+to the sphere position.
+
+## Discrete Centre of Mass {#sec-discrete-com}
+
+Applying @eq-com with the divergence theorem to the closed triangulated
+surface, with signed tetrahedron volumes $V_t=\tfrac16\,p_1\cdot(p_2\times p_3)$ with respect to the origin and the
+tetrahedron centroids $(p_1+p_2+p_3)/4$,
+$$
+\mathbf r_{\mathrm{COM}}=\frac{\sum_tV_t\,(p_1+p_2+p_3)/4}{\sum_tV_t}.
+$$ {#eq-com-discrete}
+Base triangles lie in the plane through the origin, so their tetrahedra vanish and the open dome and the
+closed mesh give the same value.

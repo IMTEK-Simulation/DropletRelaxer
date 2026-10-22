@@ -1,0 +1,127 @@
+# Adaptive Remeshing {#sec-remeshing}
+
+
+A fixed mesh eventually becomes a poor approximation of the surface:
+regions stretched by the sphere obstacle develop long, thin triangles
+(a poor discretization of curvature there), while regions no longer
+under active deformation carry more resolution than they need. Unlike
+the energy terms and the gradient step, remeshing is not part of the
+variational problem itself -- it never changes $x$ by following a
+gradient, only the DISCRETIZATION (vertices/triangles) representing
+the same physical surface -- so this section is purely about
+`mesh.py`'s operations and the driver's (`DropletRelaxer.driver`) scheduling of
+them, not about deriving new energy terms.
+
+## Two Refinement Modes
+
+`MeshConfig.remesh_split_mode` selects between two ways of
+adding resolution, checked periodically (every
+`remesh_check_every` iterations) against the current longest
+edge relative to the mesh's original mean edge length
+(`remesh_trigger_ratio`):
+
+- **Global (`subdivide_mesh`):** every triangle is
+  split into 4 by inserting a vertex at each edge's midpoint. Because
+  every edge gets exactly one midpoint, shared by both triangles
+  bordering it, the result is always a valid mesh with no
+  \"T-junction\" (a mismatched edge where one side is subdivided and
+  its neighbor is not) -- at the cost of refining the WHOLE mesh
+  uniformly, including regions far from the obstacle that did not
+  need it.
+
+- **Local (`refine_rivara`):** Rivara longest-edge
+  bisection [@Rivara1984], which refines only where an edge actually exceeds its
+  target length -- and, near the obstacle
+  (`remesh_contact_len_ratio`), targets a deliberately
+  finer length than elsewhere. The classical algorithm avoids
+  T-junctions without touching the rest of the mesh: a triangle is
+  bisected at its longest edge only once the triangle across that
+  edge agrees that this IS its longest edge too (otherwise that
+  neighbor is refined first, recursively -- the propagation only
+  ever walks towards longer edges, so it terminates).
+
+Both preserve the boundary ring's cyclic structure and re-project any
+new boundary vertex exactly to $z=0$ (guarding against floating-point
+drift, since its two parent vertices are already there by
+construction).
+
+## Edge Collapse
+
+Repeated splitting grows the triangle count without bound, so
+`collapse_short_edges` prunes it back: whenever an edge
+(never one touching the boundary ring) falls below a length threshold,
+its two endpoints are merged to their midpoint, subject to two safety
+checks applied *before* committing:
+
+- the *link condition* -- the two endpoints' neighbor sets
+  may intersect only in the (at most two) apex vertices of the
+  triangles already adjacent to that edge; otherwise the collapse
+  would pinch the surface into a non-manifold shape, and is skipped;
+
+- no triangle that survives the collapse may flip its normal
+  direction or degenerate (checked by comparing each affected
+  triangle's normal before and after the trial move); otherwise the
+  collapse is skipped.
+
+A single pass never lets a committed collapse's neighborhood
+participate in a second collapse in the same pass (every vertex it
+touches is \"frozen\" for the rest of that pass), so the driver
+calls it repeatedly, once per remesh check, for further pruning. Local
+refinement's collapse counterpart additionally accepts a
+`protect_center`/`protect_radius` (the obstacle's
+current position): edges near it are excluded from the ordinary
+length threshold entirely, optionally down to a separate, much smaller
+`protect_min_len` that still lets a pathologically
+short edge there collapse (e.g. the wetted patch's contact line
+getting pinched by competing forces as it moves) without eroding the
+extra resolution the obstacle still needs. This asymmetric
+split-everywhere / collapse-outside-a-protected-region combination is
+what approximates genuinely local/adaptive remeshing without a fully
+general adaptive scheme: resolution still spreads globally on a split,
+but persists selectively near the obstacle once collapse starts
+pruning it back elsewhere.
+
+## Triggers and Mesh-Quality Smoothing
+
+The driver checks (every `remesh_check_every`
+iterations) whether the longest edge exceeds
+`remesh_trigger_ratio` times the original mean edge length
+(triggering a split), or whether the FRACTION of all edges shorter
+than `remesh_min_edge_ratio` times that same reference
+exceeds `remesh_min_edge_fraction` (triggering a collapse
+pass) -- a fraction, not the single minimum edge, because an
+\"umbrella\" mesh converging on one apex vertex structurally always has
+a handful of persistently short spoke edges there regardless of any
+obstacle, which would otherwise trigger collapse permanently. In local
+mode, two additional obstacle-local triggers
+(`long_edges_near`/`short_edges_near`) catch
+distortion concentrated near the obstacle before it shows up in either
+global metric. Whenever any trigger fires, the current segment of
+`solver.py:relax` (a Python generator) is stopped, the mesh is
+split or collapsed, and a fresh `relax` call resumes from the
+same iteration with the new vertex/triangle arrays -- the sparse
+Laplacian factorization @eq-sobolev-grad (which depends on the
+mesh's edge topology) is otherwise only ever rebuilt at these
+boundaries, not on a fixed schedule. Independently of remeshing,
+`tangential_smooth_step` (used both right after a remesh
+event and periodically during relaxation, every
+`tangential_smoothing_every` iterations) moves every non-fixed
+vertex partway toward its neighbors' centroid with the along-normal
+component of that offset removed first -- a pure mesh-quality cleanup
+(it does not follow a gradient of the area/volume/wetting energy and
+does not measurably change area, volume, or curvature) that keeps
+triangles from crowding together at high-curvature regions like the
+apex, which would otherwise shrink the trust-region step cap there
+(@sec-trust-region) and stall convergence.
+
+*Implementation:* `mesh.py:subdivide_mesh`,
+`mesh.py:refine_rivara`, `mesh.py:collapse_short_edges`,
+`mesh.py:tangential_smooth_step`; scheduling in `DropletRelaxer.driver`.
+
+## Cost and Speed-ups
+
+On the earlier default run (2500 iterations, no window) of about $25$ s, the relaxation took about $63\%$ and remeshing about $35\%$ of the time.
+Two changes reduced it to $19$--$21$ s with bit-identical results (area, volume, radius and $41$ remeshings unchanged):
+`collapse_short_edges` was rewritten with a CSR adjacency in `numpy` and lazily built per-vertex neighbour sets (identical output on $215$ recorded real calls; local $3.5\to0.6$ s, global $1.9\to0.6$ s),
+and edge extraction uses integer keys (`wetting.unique_edges`, $3$--$4\times$ faster). Skipping the wetting step gave no gain (contact in about $85\%$ of the iterations, patch about $450$ of $2200$ vertices);
+compiling the kernels with Numba made them $9\times$ faster but the whole run only $10$--$15\%$, so it is not enabled.

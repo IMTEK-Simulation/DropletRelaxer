@@ -1,0 +1,32 @@
+# Meshes, Scaling and Degrees of Freedom {#sec-meshes}
+
+
+**Start mesh.** The default start mesh is a "disk": a cone-like dome of `n_rings` rings
+over a circle of unit radius, where ring $k$ carries $6k$ vertices (hexagonal ring layout, giving nearly equilateral triangles),
+centred on an apex vertex and with the outermost ring on $z=0$. A UV-sphere cap is available as alternative.
+The start height `start_height` fixes the initial volume.
+
+**Scaling.** The mesh is scaled uniformly so that its volume equals `target_volume`
+(scale factor $s$). Quantities with the dimension of a length or of an energy per length are scaled with it:
+the volume penalty by $s^{-4}$, the snap distance, capture radius and substrate size by $s$, and the colour limits of the curvature by $1/s$.
+Sphere path points and anomaly lengths are *not* scaled; they are given in the physical units of the scaled mesh.
+
+**Degrees of freedom.** The contact-line (ring) vertices keep $z=0$: the $z$-component of their gradient is set to zero before the step and the coordinate is reset to $0$ afterwards (`mesh.build_dof_mask`).
+Their $x,y$ components are free. This is the discrete form of the mixed boundary condition of @sec-contact-line
+and is the *boundary-discrete* condition referred to in Part I
+.
+
+**Closed mesh.** By default (`base_mesh_enabled`) the dome is closed by a flat base. Base interior vertices are not
+degrees of freedom: every iteration they are placed by a harmonic (Tutte) embedding of the ring
+(uniform-weight graph Laplacian, sparse LU per topology), which is fold-free for a convex ring. For a strongly non-convex ring the
+program falls back to an ear-clipping triangulation without interior vertices; the signed area keeps the energy correct even for a folded base. The Sobolev
+Laplacian, the trust region, the smoothing and the wetting adjacency use dome triangles only. At a remesh the base is stripped, the open dome is remeshed and the base is rebuilt (Delaunay of a canonical circle, then the embedding).
+The closed formulation reproduces the open-mesh energy and gradient to $\approx10^{-13}$ for $\theta_Y=60^\circ,90^\circ,120^\circ$ and costs about $30\%$ additional run time.
+
+**Sphere path and quasi-static stepping.** The centre moves on the straight line from `center_start` to `center_end`, parametrised by $u\in[0,1]$.
+In the default quasi-static mode ($u$ is a state of the solver, not a function of the iteration number) the sphere stands at $u_k$ until the liquid has relaxed; then a frame is recorded and
+$u_{k+1}=u_k+\Delta/\ell$ ($\Delta$ = `step`, $\ell$ the path length, the last step is clipped to the end). A step counts as converged when, at two consecutive tests (every `check_every`
+iterations, not before `min_iter_per_step`), $|E-E_\mathrm{prev}|/(\gamma V_0^{2/3})<\varepsilon_E$, $\max_k|F_k-F_{k,\mathrm{prev}}|/(\gamma V_0^{1/3})<\varepsilon_F$ and the largest vertex move per iteration
+in the window, relative to $V_0^{1/3}$, is below $\varepsilon_x$ (the raw gradient criterion `grad_tol` also counts). At equilibrium the force is $F=-\mathrm{d}E^*/\mathrm{d}c$ (envelope argument), so the recorded pairs $(E,F)$ are consistent.
+A step that does not converge within `max_iter_per_step` is either accepted and marked (fixed step), or, with `adaptive`, rolled back to the last converged state and retried with $\Delta/2$ (down to
+`step`$\cdot$`min_step_factor`); a quickly converged step doubles it again (up to `step`). Warm starts are used throughout. The old iteration-driven mode (`quasi.enabled=False`) uses $u=t$, the iteration fraction.

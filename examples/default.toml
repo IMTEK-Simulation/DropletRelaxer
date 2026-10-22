@@ -1,0 +1,12 @@
+# The default scenario: a ~130000 um^3 droplet on a rough (chemically
+# disordered) substrate, a 100 um sphere pressed into it and dragged 50 um
+# sideways in quasi-static steps of 0.1 um.
+#
+# Every key that is not set here takes its default; see all of them with
+#     droplet-relax show-config
+#
+#     droplet-relax run examples/default.toml -o default.h5
+#     droplet-view live examples/default.toml
+
+[viewer]
+curvature_clim = [0.0, 4.0]

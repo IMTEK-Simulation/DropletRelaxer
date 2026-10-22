@@ -1,0 +1,65 @@
+# Troubleshooting {#sec-troubleshooting}
+
+## OpenGL/VTK window errors on Linux
+
+If `droplet-view` prints errors such as `Could not find a decent config` or
+`Could not find a decent visual`, or crashes right after startup with a
+segmentation fault, this is a VTK/OpenGL issue, not a bug in this project. VTK
+tries a real GPU-accelerated GLX context first, then falls back to EGL, then to
+a software renderer (OSMesa) -- and crashes if that last fallback library is
+missing instead of failing gracefully. `droplet-view` prints hints when it
+sees a missing `DISPLAY`, a Wayland session or an active Conda environment.
+
+Diagnostics:
+
+```bash
+echo $XDG_SESSION_TYPE
+sudo apt install -y mesa-utils libosmesa6
+glxinfo | grep "OpenGL renderer"
+```
+
+- If `$XDG_SESSION_TYPE` prints `wayland`, that is very likely the cause:
+  VTK's GLX window needs an X11 session. Switch to an "... on Xorg" session at
+  the login screen.
+- `libosmesa6` is the software fallback, so the program at least runs (via
+  software rendering) even if GPU acceleration isn't working.
+- If `glxinfo` does not return a real renderer name, the issue is at the
+  graphics-driver level (e.g. a missing proprietary NVIDIA driver),
+  independent of this project.
+- **`droplet-view --software-gl ...`** forces Mesa's software renderer
+  (llvmpipe): slower, but independent of the GPU driver. Quickest test after a
+  reboot or driver update.
+
+**Conda.** If a Conda environment is active (prompt shows `(base)` or
+similar), Conda's `LD_LIBRARY_PATH` points at its own `libstdc++`/X11
+libraries, which can shadow the system's Mesa/OpenGL libraries for any process
+started from that shell -- also inside an unrelated venv. Run `conda
+deactivate` first, or `env -u LD_LIBRARY_PATH droplet-view ...`. A venv built on
+Conda's Python loads Conda's libraries even then: build the venv with the
+system Python (`/usr/bin/python3 -m venv venv`).
+
+**No multisample GLX config.** If X11, a real GPU renderer and `glxgears` all
+work and it still fails, the likely cause is that no multisample
+(anti-aliasing) GLX FBConfig is offered at all -- a multi-monitor desktop
+combined into one large X11 screen is one known trigger -- and VTK's GLX config
+search does not fall back to a config without multisampling. The viewer
+disables multisampling before the window is created
+(`vtkOpenGLRenderWindow.SetGlobalMaximumNumberOfMultiSamples(0)` in
+`DropletViewer.scene.make_plotter`), which fixes this. To check VTK on its
+own:
+
+```bash
+python -c "import vtk; print(vtk.vtkVersion.GetVTKVersion())"
+python -c "import vtk; vtk.vtkRenderWindow().Render()"                          # fails
+python -c "import vtk; vtk.vtkOpenGLRenderWindow.SetGlobalMaximumNumberOfMultiSamples(0); vtk.vtkRenderWindow().Render()"  # works
+```
+
+The viewer requires `vtk>=9.3` without an upper bound. Should a new VTK release
+break the window again, pin it in your environment
+(`pip install "vtk<X.Y"`) and report it.
+
+## Headless machines
+
+The solver needs no display at all. For pictures on a headless machine use
+`droplet-view run.h5 --video out.mp4`, which renders off screen (on Linux
+servers via EGL/OSMesa, or under `xvfb-run`).

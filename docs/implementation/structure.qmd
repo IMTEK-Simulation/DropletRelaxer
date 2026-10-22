@@ -1,0 +1,58 @@
+# Program Structure {#sec-structure}
+
+Part II describes what the program does with the model of Part I. Statements
+about *numerical devices* are explicitly marked as such: they change the path of the
+iteration or the quality of the mesh, but are not derived from the energy.
+
+The code is split into two Python distributions. **DropletRelaxer** is the
+headless solver: it depends on NumPy, SciPy and h5py only, reads a scenario
+(a TOML file, @sec-usage-configuration) and writes a run file
+(@sec-file-format). **DropletViewer** reads run files, or runs the solver in the
+same process with a live window; it depends on DropletRelaxer, PyVista and VTK.
+The solver never imports the viewer.
+
+```
+  scenario.toml ──► droplet-relax (DropletRelaxer.driver) ──► run.h5 (VTKHDF + /DropletRelaxer)
+                                                                   │
+                       ParaView / any VTK ◄────────────────────────┤
+                       droplet-view (replay, --follow, --video) ◄──┘
+  scenario.toml ──► droplet-view live  =  driver + H5Writer + LiveWindow in one process
+```
+
+::: {#tbl-modules}
+| Module | Content |
+|:---|:---|
+| `DropletRelaxer.config` | All parameters (dataclasses `MeshConfig`, `SolverConfig`, `ObstacleConfig`, `OutputConfig`, `AnomalyConfig`, `RoughnessConfig`, `QuasiStaticConfig`); strict TOML loading, overrides, volume scaling. |
+| `DropletRelaxer.driver` | Start mesh, scaling to the target volume, remesh scheduling, frames and checkpoints for the sinks, restart. |
+| `DropletRelaxer.mesh` | Start meshes, DOF mask, global subdivision, Rivara refinement, edge collapse, tangential smoothing. |
+| `DropletRelaxer.substrate` | Closed mesh: base triangulation (Tutte embedding / ear clipping), per-triangle energy weights. |
+| `DropletRelaxer.energy` | Area, volume and their gradients, graph Laplacian, curvature, wall energy, substrate penetration, centre of mass. |
+| `DropletRelaxer.obstacle` | Straight sphere path $\mathbf c(u)$, collision/adhesion penalty. |
+| `DropletRelaxer.quasistatic` | Event-driven sphere stepping: convergence test, step advance, adaptive rollback, ETA. |
+| `DropletRelaxer.wetting` | Wetted-set detection, contact loop, sphere wetting energy. |
+| `DropletRelaxer.anomaly` | Circular wettability anomaly (polygon flux and exact gradient). |
+| `DropletRelaxer.roughness` | Random substrate roughness / chemical disorder. |
+| `DropletRelaxer.solver` | The relaxation generator `relax`, force on the sphere, step control. |
+| `DropletRelaxer.analysis` | Per-frame quantities: surface free energy, COM offset, gap. |
+| `DropletRelaxer.io` | `Frame`, `FrameSink`, `StopRequest`; the run file (`schema`, `writer`, `reader`). |
+| `DropletRelaxer.cli` | `droplet-relax run`, `restart`, `info`, `show-config`. |
+| `DropletViewer.scene` | Window, surface, sphere, contact lines, substrate, info texts, progress bar. |
+| `DropletViewer.charts`, `.history`, `.video` | Energy and force charts, history slider with Play/Save, video export. |
+| `DropletViewer.live` | `LiveWindow`, the in-process live window as a frame sink. |
+| `DropletViewer.app`, `.cli` | `droplet-view` (replay, `--follow`, `--video`, `live`). |
+
+: Modules of the program.
+:::
+
+**Data flow.** `DropletRelaxer.driver.Driver` builds and scales the start
+mesh, then runs `DropletRelaxer.solver.relax`, a Python generator that performs
+iterations and yields every state to the driver. The driver decides on
+remeshing; when a remesh trigger fires, the segment ends, the mesh is changed
+and a new `relax` segment continues at the same iteration number. Everything the
+outputs need is computed by the driver (`DropletRelaxer.analysis`) and handed to
+*frame sinks*: a read-only `Frame` per recorded state, `Event`s (remesh,
+divergence, log lines), a cheap `tick` per iteration and periodic restart
+checkpoints. The HDF5 writer, the console output and the live window are such
+sinks. Nothing flows back into the numerics except a `StopRequest` (window
+closed, Stop button, SIGTERM), so a run is bit-identical with or without a
+window.

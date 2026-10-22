@@ -1,0 +1,77 @@
+# The Continuous Variational Problem {#sec-continuous-problem}
+
+
+## The Area Functional and Its First Variation
+
+Let $\Sigma \subset \mathbb{R}^3$ be a smooth, oriented surface with unit
+normal $n$. Consider a family of surfaces $\Sigma_t$ obtained by
+displacing every point along the normal:
+$$
+x(t) = x_0 + t\,\varphi(x_0)\, n(x_0), \qquad x_0 \in \Sigma,
+$$
+with a scalar \"speed function\" $\varphi$. The first variation of the
+area functional $A[\Sigma_t] = \int_{\Sigma_t} \mathrm{d}A$ under this
+perturbation is a classical result of differential geometry:
+$$
+\left.\frac{\mathrm{d}}{\mathrm{d}t}\right|_{t=0} A[\Sigma_t]
+  = -\int_{\Sigma} H \,\varphi \; \mathrm{d}A,
+$$ {#eq-first-variation-area}
+where $H = \kappa_1 + \kappa_2$ is the mean curvature (here defined as
+the sum of the principal curvatures). @eq-first-variation-area states that the $L^2$-gradient of the
+area functional with respect to normal displacements is
+$$
+\nabla A \;=\; -H\, n.
+$$ {#eq-area-gradient-continuous}
+The steepest descent $\partial x/\partial t = -\nabla A = H n$ is thus
+exactly the *mean curvature flow* -- precisely the process that
+Brakke described mathematically, rigorously, within the framework of
+geometric measure theory, in his dissertation [@Brakke1978] (from
+which the Surface Evolver later grew).
+
+## The Volume Constraint
+
+Displacing the surface by $\varphi\,n$ changes the enclosed volume, to
+first order, by
+$$
+\left.\frac{\mathrm{d}}{\mathrm{d}t}\right|_{t=0} V[\Sigma_t]
+  = \int_{\Sigma} \varphi \; \mathrm{d}A,
+  \qquad\text{i.e.}\qquad
+  \nabla V = n.
+$$ {#eq-volume-gradient-continuous}
+For the minimization problem @eq-problem, the Lagrange
+multiplier method gives: at a critical point there exists
+$\lambda \in \mathbb{R}$ such that
+$$
+\nabla A - \lambda \,\nabla V = 0
+  \quad\Longleftrightarrow\quad
+  H = \lambda = \text{const.}
+$$ {#eq-cmc}
+This is the classical theorem that area-minimizing surfaces under a
+fixed volume constraint have *constant mean curvature* (spherical
+caps, soap bubbles) -- the Lagrange multiplier $\lambda$ is physically
+the internal pressure (the Young--Laplace law).
+
+## Boundary Condition at the Contact Line {#sec-contact-line}
+
+At the boundary $\partial\Sigma$ (the contact line), there are two
+standard cases:
+
+- **Pinned boundary (Dirichlet):** $\partial\Sigma$ is fixed
+  in advance, e.g. a circle on the substrate.
+
+- **Free contact angle (Neumann-type):** $\partial\Sigma$ is
+  allowed to move freely on the substrate, but there is a substrate
+  energy $(\gamma_{sl}-\gamma_{sv})\cdot(\text{wetted area})$. The
+  first variation then leads to Young's equation
+  $\cos\theta = (\gamma_{sv}-\gamma_{sl})/\gamma_{lv}$ for the
+  equilibrium contact angle $\theta$.
+
+In the model treated here the boundary condition is a mixture of the
+two: the contact line is Dirichlet-constrained only in the direction
+*normal to the substrate* (it must stay on the wall, $z=0$) but is
+otherwise free to slide within the substrate plane, with the
+free-contact-angle substrate energy added explicitly (@sec-wall-energy).
+Without that energy term the boundary reduces to a pure natural
+(Neumann) condition and settles at $\theta=90^\circ$; the contact line is never
+pinned (fixed radius) in this model. The discrete degree-of-freedom
+restriction is described in @sec-meshes.

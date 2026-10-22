@@ -1,0 +1,173 @@
+# Constraints and the Optimisation Method {#sec-constraint}
+
+
+## Exact Lagrange Projection
+
+To keep the volume exactly conserved (to first order) at every
+gradient step, we project the area gradient $g_A = \nabla A$ onto the
+tangent space of the constraint surface $\{x : V(x)=V_0\}$. This
+tangent space is $T_x = \{h : \nabla V(x)\cdot h = 0\}$, and the
+orthogonal projection of $g_A$ onto $T_x$ is
+$$
+g_{\mathrm{proj}} = g_A - \lambda\, g_V,
+  \qquad
+  \lambda = \frac{g_A \cdot g_V}{g_V \cdot g_V},
+$$ {#eq-lagrange-projection}
+where $\lambda$ is chosen such that $g_V \cdot g_{\mathrm{proj}} = 0$
+holds (i.e. the motion is volume-neutral to first order). This is the
+classical *gradient projection method* (Rosen), and it exactly
+matches the Lagrange multiplier condition @eq-cmc of the
+continuous problem: at the optimum, $g_A$ is proportional to $g_V$ and
+the projected gradient vanishes.
+
+## Penalty Formulation
+
+The exact projection requires a Gram--Schmidt-like orthogonalization
+when several constraints are active simultaneously (multiple volumes,
+boundary conditions), which adds extra implementation cost.
+A simpler alternative, used by the program, is the *quadratic
+penalty method*: instead of @eq-problem, the *unconstrained*
+surrogate problem
+$$
+\min_x \; E_k(x), \qquad
+  E_k(x) := A(x) + k\,\big(V(x)-V_0\big)^2
+$$ {#eq-penalty}
+is solved for a fixed penalty weight $k>0$, with
+gradient
+$$
+\nabla E_k(x) = g_A(x) + 2k\big(V(x)-V_0\big)\, g_V(x).
+$$ {#eq-penalty-grad}
+It is a classical result of optimization theory that the minimizers of
+$E_k$ converge to the minimizer of the constrained problem
+@eq-problem as $k\to\infty$; for finite $k$, a small but
+generally non-vanishing volume deviation remains . The penalty method is
+particularly well suited in the context of a gradient flow (rather
+than an exact per-step minimization): it fits in seamlessly as an
+additional additive term in @eq-penalty-grad and works
+unchanged for arbitrarily many simultaneous constraints (simply add
+more penalty terms).
+
+Whenever further energies are present (wall, wetting), $A$ in @eq-penalty is replaced
+by the total energy $E$ and $g_A$ in @eq-penalty-grad by $\nabla E$; this is the gradient
+$g^E$ used in Part II.
+
+## Non-Penetration of a Rigid Sphere {#sec-constraint-sphere}
+
+A rigid sphere of radius $R$ and (possibly time-dependent) centre $\mathbf c(t)$ must not be
+penetrated by the liquid. For a vertex $v_i$ define the signed gap
+$g_i=\lVert v_i-\mathbf c\rVert-R$, negative inside the sphere. Like the volume constraint, the
+constraint $g_i\ge0$ is enforced softly by one-sided quadratic penalties,
+$$
+E_{\mathrm{sphere}}
+  = \underbrace{k_c\sum_{i:\,g_i<0}g_i^2}_{\text{collision}}
+  \;+\;
+  \underbrace{k_a\sum_{i:\,0\le g_i<r_c}g_i^2}_{\text{adhesion (optional)}},
+  \qquad
+  \nabla_{v_i}E_{\mathrm{sphere}}=2k\,g_i\,\hat n_i,\quad \hat n_i=\frac{v_i-\mathbf c}{\lVert v_i-\mathbf c\rVert},
+$$ {#eq-sphere-penalty}
+where $r_c$ is a capture radius. Both pieces are continuous and vanish at $g_i=0$. A substrate-penetration
+term of identical one-sided form, $k_s\sum_{i:\,z_i<0}z_i^2$, keeps the whole surface above the wall.
+These penalties are *not* derived from Young's equation; they only prevent interpenetration.
+Where a vertex is part of a genuine wetted patch, the exact energy
+@eq-sphere-wetting-energy takes over its tangential behaviour and the radial
+component of the gradient is removed by a bilateral constraint (@sec-sphere-wetting).
+Because the penalties are one-sided and local, the model keeps the topology of the surface: it can
+deform around the sphere, but it cannot pinch off into a detached bridge.
+
+## Gradient Flow and Explicit Euler Integration
+
+The gradient flow $\partial x/\partial t = -\nabla E_k(x)$ is -- as
+shown in @sec-continuous-problem -- at its core the mean curvature flow,
+augmented with the penalty term. The simplest numerical time
+integration is an explicit Euler step with step size $\eta$
+:
+$$
+x^{n+1} = x^n - \eta\, \nabla E_k(x^n).
+$$ {#eq-explicit-euler}
+Mean curvature flow is a second-order parabolic equation; explicit
+time integration of it is subject to a CFL-like stability condition
+$\eta = O(h^2)$, where $h$ is the typical edge length of the mesh
+[@Desbrun1999] -- as the mesh is refined, the step size must
+therefore shrink quadratically, which severely slows convergence on
+fine meshes.
+
+## Sobolev Preconditioning {#sec-sobolev}
+
+This stability restriction arises because the $L^2$ gradient weights
+high-frequency (rough, oscillating between neighboring vertices)
+perturbations just as strongly as low-frequency (smooth, large-scale)
+perturbations -- yet the curvature energy reacts far more sensitively
+to high-frequency perturbations. The idea of *Sobolev gradients*
+[@Neuberger] (applied to geometric flows, among others, in
+[@Sundaramoorthi2007]) is to form the gradient not with respect to
+the $L^2$ inner product, but with respect to an $H^1$-type inner
+product
+$$
+\langle u, v\rangle_{\mathrm{Sob}}
+  := \langle u,v\rangle_{L^2} + \alpha\, \langle \nabla u, \nabla v\rangle_{L^2}.
+$$
+Discretely, the (graph) Laplacian $L$ (see below) is used as an
+approximation of $-\Delta$, and the Sobolev gradient
+$g_{\mathrm{Sob}}$ is implicitly defined by the requirement
+$$
+\langle g_{\mathrm{Sob}}, h\rangle_{\mathrm{Sob}}
+  = \langle g_{L^2}, h\rangle_{L^2} \quad \forall h,
+$$
+which leads to the linear system
+$$
+\boxed{\;
+  (I + \alpha L)\, g_{\mathrm{Sob}} = g_{L^2}
+  \;\Longleftrightarrow\;
+  g_{\mathrm{Sob}} = (I+\alpha L)^{-1} g_{L^2}
+  \;}
+$$ {#eq-sobolev-grad}
+The operator $(I+\alpha L)^{-1}$ is a low-pass filter: it strongly
+damps high-frequency components of $g_{L^2}$ while leaving
+low-frequency ones nearly unchanged. In practice, this means the
+gradient step is \"smoothed\" before it is applied, which allows
+substantially larger stable step sizes $\eta$ and increases the
+effective convergence speed (see the method comparison, where Sobolev
+gradient descent reaches lower energy than plain gradient descent at
+the same iteration count).
+
+## The Discrete Laplace Operator
+
+We use the simple (unnormalized) graph Laplacian over the mesh edges:
+for vertices $i,j$ with an edge $(i,j)$ in the mesh,
+$$
+L_{ij} =
+  \begin{cases}
+    \deg(i) & i = j\\
+    -1 & (i,j) \text{ is a mesh edge}\\
+    0 & \text{otherwise,}
+  \end{cases}
+$$
+with $\deg(i)$ the number of neighbors of $i$. The linear system
+@eq-sobolev-grad is sparse and is solved componentwise
+($x$, $y$, $z$ separately); its matrix depends only on the mesh topology, so one
+factorization serves all iterations until the topology changes.
+
+## Trust-Region Step Capping {#sec-trust-region}
+
+Sobolev smoothing controls the stability of the flow as a whole, but
+does not bound how far any INDIVIDUAL vertex can move in one step --
+which matters once the mesh has strongly non-uniform edge lengths
+(e.g. right after local refinement near the obstacle,
+@sec-remeshing): a short edge there can tolerate only a
+much smaller absolute displacement before the triangle degenerates
+than a long edge elsewhere. When a fraction
+$f$ is set, the step @eq-explicit-euler is rescaled per
+vertex so that no vertex moves further than $f$ times the shortest
+edge currently incident to it (floored at a quarter of the mesh's
+median edge length, so one degenerate edge cannot freeze its vertex
+entirely):
+$$
+x_i^{n+1} = x_i^n - \min\!\Big(1,\, \frac{f \cdot \ell_i}{\lVert \eta\, g_{\mathrm{Sob},i}\rVert}\Big)\, \eta\, g_{\mathrm{Sob},i},
+  \qquad \ell_i = \max\big(\min_{j \sim i} \lVert x_i - x_j\rVert,\ \tfrac14\,\mathrm{median}(\ell)\big),
+$$ {#eq-trust-region}
+i.e. the ordinary Sobolev step @eq-sobolev-grad whenever it is
+already within the cap, uniformly shrunk towards it otherwise; the
+direction of $g_{\mathrm{Sob},i}$ is never altered, only its
+magnitude. This is a per-vertex, per-step safety bound layered on top
+of the smoothed gradient, not a replacement for
+the role of $\eta$ in @eq-explicit-euler.
