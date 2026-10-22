@@ -26,6 +26,7 @@ class RunFile:
         self.follow = follow
         self._run_info = None
         self._n_follow = 0
+        self._status_follow = "running"
         self.refresh()
 
     def close(self):
@@ -46,7 +47,9 @@ class RunFile:
     @property
     def status(self):
         """"running", "finished", "stopped" or "diverged" ("running" also
-        for a run that was killed)."""
+        for a run that was killed). In follow mode: as of the last refresh()."""
+        if self.follow:
+            return self._status_follow
         return self.f[GROUP]["status"][0].decode().strip()
 
     @property
@@ -60,6 +63,12 @@ class RunFile:
         afterwards shows at least that much."""
         if not self.follow:
             return
+        # Order matters: the writer sets the status after the last frame, so a
+        # status read FIRST that says "finished" guarantees that the frame
+        # count read next includes every frame.
+        status = self.f[GROUP]["status"]
+        status.refresh()
+        self._status_follow = status[0].decode().strip()
         values = self.f["VTKHDF/Steps/Values"]
         values.refresh()
         n = int(values.shape[0])
