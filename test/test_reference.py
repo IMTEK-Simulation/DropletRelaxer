@@ -33,3 +33,43 @@ def test_reference_run(name):
         np.testing.assert_allclose(out["force"], ref["force"], rtol=1e-8, atol=1e-10, err_msg="force")
     if os.environ.get("DROPLET_REFERENCE_HASH") == "1":
         assert out["sha256"] == ref["sha256"]
+
+
+def test_quasistatic_restart_is_bit_identical(tmp_path):
+    """The sphere scenario killed mid-run and restarted from its last
+    checkpoint ends in exactly the state of the uninterrupted run (quasi-static
+    controller state, remesh bookkeeping and mesh all restored)."""
+    from DropletRelaxer.config import Config
+    from DropletRelaxer.driver import Driver
+    from DropletRelaxer.io import NullSink
+    from DropletRelaxer.io.reader import RunFile
+    from DropletRelaxer.io.writer import H5Writer
+
+    class Kill(NullSink):
+        def tick(self, i, progress, eta):
+            if i >= 17000:
+                raise KeyboardInterrupt
+
+    cfg = Config()
+    reference_run.SCENARIOS["sphere"](cfg)
+    cfg.output.checkpoint_every = 1000
+    path = str(tmp_path / "sphere.h5")
+    writer = H5Writer(path)
+    with pytest.raises(KeyboardInterrupt):
+        Driver(cfg, sinks=[writer, Kill()]).run()
+    writer.f.close()
+    with RunFile(path) as rf:
+        ck = rf.checkpoint()
+        cfg2, _ = rf.config()
+    assert 0 < ck["iteration"] < 17000
+    res = Driver(cfg2, sinks=[H5Writer(path, append=True)], restart=ck).run()
+    with open(os.path.join(reference_run.REFERENCE_DIR, "sphere.json")) as f:
+        ref = json.load(f)
+    np.testing.assert_allclose(res["energy"], ref["energy"], rtol=1e-10)
+    assert res["iteration"] == ref["iteration"] and res["quasi_frames"] == ref["quasi_frames"]
+    if os.environ.get("DROPLET_REFERENCE_HASH") == "1":
+        import hashlib
+        h = hashlib.sha256()
+        h.update(np.ascontiguousarray(res["verts"], dtype=np.float64).tobytes())
+        h.update(np.ascontiguousarray(res["tris"], dtype=np.int64).tobytes())
+        assert h.hexdigest() == ref["sha256"]

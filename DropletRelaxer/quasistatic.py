@@ -156,6 +156,27 @@ class QuasiStatic:
         self.frame_info = {"step_iters": self.n_it, "converged": ok, "u": self.u}
         self.converged_now = True
 
+    # Everything that influences the numerics (and the counters printed at
+    # the end); the wall-clock rate for the ETA is not part of it.
+    _STATE = ("u", "u_done", "n_it", "converged_now", "finished", "delta", "frames", "unconverged",
+              "rollbacks", "total_iters_in_frames", "prev_E", "step_max_run", "last_ok")
+
+    def get_state(self):
+        """(dict of scalars, rollback verts or None) for a restart checkpoint."""
+        d = {k: getattr(self, k) for k in self._STATE}
+        d["prev_F"] = None if self.prev_F is None else [float(x) for x in self.prev_F]
+        d["frame_info"] = dict(self.frame_info)
+        d["ckpt_u"] = None if self.ckpt is None else float(self.ckpt[0])
+        return d, (None if self.ckpt is None else self.ckpt[1])
+
+    def set_state(self, d, ckpt_verts=None):
+        """Inverse of get_state."""
+        for k in self._STATE:
+            setattr(self, k, d[k])
+        self.prev_F = None if d["prev_F"] is None else np.array(d["prev_F"], dtype=float)
+        self.frame_info = dict(d["frame_info"])
+        self.ckpt = None if d["ckpt_u"] is None else (d["ckpt_u"], np.array(ckpt_verts, dtype=float))
+
     def rollback(self):
         """Back to the last converged state with half the step. Returns the
         verts to restore."""

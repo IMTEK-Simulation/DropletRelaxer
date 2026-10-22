@@ -3,7 +3,8 @@
 The driver (driver.py) knows nothing about files or windows. It hands a
 `RunInfo` to every sink at the start, then one `Frame` per recorded state,
 `Event`s (remesh, divergence, log lines) as they happen, a cheap `tick` every
-iteration, and finally a `RunStatus`. The HDF5 writer, the console output and
+iteration, restart checkpoints (the complete driver state, every
+`output.checkpoint_every` iterations and at the end), and finally a `RunStatus`. The HDF5 writer, the console output and
 the viewer's live window are all sinks; the file reader yields the same
 `Frame` objects, so a viewer has one input type whatever the source.
 
@@ -69,7 +70,7 @@ class Frame:
 class Event:
     """Something that happened between frames.
 
-    kind: "remesh" (data: remesh kind, n_verts_before/after, n_tris_before/after,
+    kind: "remesh" (data: remesh_kind, epoch, n_verts_before/after, n_tris_before/after,
           and the new mesh: verts, tris, boundary_idx, wetted_loop, sphere_center),
           "diverged" (message), "log" (message: a console line)."""
 
@@ -93,8 +94,11 @@ class RunInfo:
     total_iters: int
     quasi_static: bool              # frames are equilibrated sphere steps
     roughness_field: Any = None     # roughness.RoughnessField or None
+    roughness_edge: float = float("nan")   # contact-line edge length the roughness field was built for
     stop: StopRequest = field(default_factory=StopRequest)
     start_iteration: int = 0        # > 0 when restarted from a checkpoint
+    restart_frames: Optional[int] = None   # frames recorded up to the restart checkpoint
+    config_unscaled: Any = None     # the config as given to the driver (before volume scaling)
 
 
 @dataclass
@@ -115,6 +119,8 @@ class FrameSink(Protocol):
 
     def tick(self, i: int, progress: float, eta: Optional[float]) -> None: ...
 
+    def checkpoint(self, state: dict) -> None: ...
+
     def finish(self, status: RunStatus) -> None: ...
 
 
@@ -131,6 +137,9 @@ class NullSink:
         pass
 
     def tick(self, i, progress, eta):
+        pass
+
+    def checkpoint(self, state):
         pass
 
     def finish(self, status):

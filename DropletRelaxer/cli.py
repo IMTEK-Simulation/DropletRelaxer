@@ -22,7 +22,7 @@ from .driver import Driver
 from .io.frame import StopRequest
 
 
-def _install_signal_handlers(stop):
+def install_signal_handlers(stop):
     def _graceful(signum, _frame):
         name = signal.Signals(signum).name
         if signum == signal.SIGINT and stop.requested:
@@ -51,7 +51,7 @@ def cmd_run(args):
         writer = H5Writer(args.output, viewer_table=table.get("viewer"), command_line=sys.argv)
         sinks.append(writer)
     stop = StopRequest()
-    _install_signal_handlers(stop)
+    install_signal_handlers(stop)
     Driver(cfg, sinks=sinks, stop=stop).run()
     if writer is not None:
         print(f"Run written to {os.path.abspath(args.output)}")
@@ -68,7 +68,7 @@ def cmd_restart(args):
     if checkpoint is None:
         raise SystemExit(f"{args.run} has no checkpoint to restart from")
     stop = StopRequest()
-    _install_signal_handlers(stop)
+    install_signal_handlers(stop)
     sinks = [ConsoleSink(progress=not args.quiet and sys.stdout.isatty()),
              H5Writer(args.run, viewer_table=viewer_table, command_line=sys.argv, append=True)]
     Driver(cfg, sinks=sinks, stop=stop, restart=checkpoint).run()

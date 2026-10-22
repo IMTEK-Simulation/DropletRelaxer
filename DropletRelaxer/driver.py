@@ -35,10 +35,17 @@ from .substrate import add_base_mesh, base_triangle_mask, strip_base
 
 class Driver:
     """Runs one relaxation of `cfg` (a config.Config, unscaled) and feeds the
-    sinks. `run()` returns a summary dict of the final state."""
+    sinks. `run()` returns a summary dict of the final state.
 
-    def __init__(self, cfg, sinks=(), stop=None):
+    The loop state that survives a remesh (split count, collapse flags,
+    epoch) lives on the instance, so that a checkpoint captures it and a
+    restart continues bit-identically."""
+
+    def __init__(self, cfg, sinks=(), stop=None, restart=None):
+        """`restart`: a checkpoint dict (see _checkpoint) to continue from,
+        e.g. io.reader.RunFile.checkpoint()."""
         self.cfg_in = cfg
+        self.restart = restart
         self.sinks = list(sinks)
         self.stop = stop if stop is not None else StopRequest()
         self._n_frames = 0
@@ -46,6 +53,7 @@ class Driver:
         self._table = []          # small per-frame records for the quasi-static console table
         self._topo_cache = {}     # epoch -> read-only (tris, boundary_idx)
         self.roughness_field = None
+        self.roughness_edge = float("nan")
 
     # -- sink fan-out -------------------------------------------------------
 
@@ -94,6 +102,24 @@ class Driver:
             s.frame(f)
         return f
 
+    def _checkpoint(self, i, verts, tris, boundary_idx, quasi):
+        """The complete state needed to continue the run after iteration `i`
+        with mesh (verts, tris, boundary_idx), handed to the sinks."""
+        if not self.sinks:
+            return
+        qstate, qverts = quasi.get_state() if quasi is not None else (None, None)
+        state = {
+            "iteration": int(i), "verts": np.array(verts), "tris": np.array(tris),
+            "boundary_idx": np.array(boundary_idx), "quasi_ckpt_verts": qverts,
+            "scalars": {
+                "epoch": self.epoch, "split_count": self.split_count,
+                "collapse_exhausted": self.collapse_exhausted, "cc_block_until": self.cc_block_until,
+                "n_frames": self._n_frames, "last_frame_iter": self._last_frame_iter, "quasi": qstate,
+            },
+        }
+        for s in self.sinks:
+            s.checkpoint(state)
+
     # -- one relax() generator ----------------------------------------------
 
     def _run_until_remesh_or_done(self, verts, tris, boundary_idx, mask, start_iter, total_iters,
@@ -129,6 +155,7 @@ class Driver:
         contact_radius = 2.0 * cfg.obstacle.radius
         contact_len = cfg.mesh.remesh_contact_len_ratio * L0
         every = max(int(cfg.output.every), 1)
+        ck_every = int(cfg.output.checkpoint_every)
 
         try:
             for i, v, A, V, sphere_center, wetted_loop in solver_gen:
@@ -170,6 +197,8 @@ class Driver:
                     return last, remesh_kind
                 if self.stop.requested:
                     return last, "stopped"
+                if ck_every > 0 and i % ck_every == 0 and i > start_iter:
+                    self._checkpoint(i, v, tris, boundary_idx, quasi)
         except SolverDiverged as err:
             # `last` is the last state the solver yielded successfully --
             # never a NaN one -- so outputs keep a valid droplet instead of it
@@ -232,6 +261,7 @@ class Driver:
         if cfg.roughness.enabled:
             _ring = verts[boundary_idx, :2]
             _edge = float(np.linalg.norm(np.roll(_ring, -1, axis=0) - _ring, axis=1).mean())
+            self.roughness_edge = _edge
             self.roughness_field = make_roughness_field(
                 cfg.roughness, _edge, math.cos(math.radians(cfg.solver.contact_angle_deg)))
             self._log("Substrate roughness:")
@@ -259,39 +289,59 @@ class Driver:
         self.run_info = RunInfo(config=cfg, mesh_scale=float(mesh_scale), V0=float(V0), A0=A0,
                                 verts=readonly(verts), tris=readonly(tris), boundary_idx=readonly(boundary_idx),
                                 total_iters=int(total_iters), quasi_static=bool(use_quasi),
-                                roughness_field=self.roughness_field, stop=self.stop)
-        for s in self.sinks:
-            s.start(self.run_info)
+                                roughness_field=self.roughness_field, roughness_edge=self.roughness_edge,
+                                stop=self.stop, config_unscaled=self.cfg_in)
 
-        split_count = 0
-        collapse_exhausted = False  # set once a collapse pass makes no
+        self.split_count = 0
+        self.collapse_exhausted = False  # set once a collapse pass makes no
         # further progress (e.g. the only remaining short edges are the
         # mesh's permanent apex "spokes", which collapse_short_edges
         # correctly refuses to touch) -- stops re-triggering the same
         # no-op pass forever.
-        epoch = 0
+        self.epoch = 0
+        self.cc_block_until = 0   # no-op contact collapses are not re-triggered before this iteration
+        start_iter = 0
+        if self.restart is not None:
+            ck = self.restart
+            sc = ck["scalars"]
+            start_iter = int(ck["iteration"])
+            verts, tris, boundary_idx = (np.array(ck["verts"], dtype=float), np.array(ck["tris"], dtype=np.int64),
+                                         np.array(ck["boundary_idx"], dtype=np.int64))
+            mask = build_dof_mask(len(verts), boundary_idx)
+            self.epoch, self.split_count = int(sc["epoch"]), int(sc["split_count"])
+            self.collapse_exhausted, self.cc_block_until = bool(sc["collapse_exhausted"]), int(sc["cc_block_until"])
+            self._n_frames, self._last_frame_iter = int(sc["n_frames"]), sc["last_frame_iter"]
+            if quasi is not None:
+                quasi.set_state(sc["quasi"], ck.get("quasi_ckpt_verts"))
+            self.run_info.start_iteration = start_iter
+            self.run_info.restart_frames = self._n_frames
+            self._log(f"Restart from the checkpoint at iteration {start_iter} "
+                      f"({len(verts)} vertices, epoch {self.epoch}).")
+        for s in self.sinks:
+            s.start(self.run_info)
+
+        epoch = self.epoch
         diag = {}
         t0 = time.perf_counter()
-        start_iter = 0
-        last = (0, verts, A0, V0, None, None)
+        last = (start_iter, verts, None, None, None, None) if self.restart is not None else \
+            (0, verts, A0, V0, None, None)
         tris_last, boundary_last, epoch_last = tris, boundary_idx, epoch
         end_kind = None
 
         t_start = time.perf_counter()
-        cc_block_until = 0   # no-op contact collapses are not re-triggered before this iteration
         while start_iter < total_iters and not (quasi is not None and quasi.finished):
             if cfg.mesh.remesh_split_mode == "local":
                 check_split = cfg.mesh.remesh_enabled and len(tris) < cfg.mesh.remesh_max_triangles
             else:
-                check_split = cfg.mesh.remesh_enabled and split_count < cfg.mesh.remesh_max_count
+                check_split = cfg.mesh.remesh_enabled and self.split_count < cfg.mesh.remesh_max_count
             # Collapsing only ever makes sense as pruning something a
             # split added, and only once we know it's actually effective
             # here (see collapse_exhausted above).
             check_collapse = (cfg.mesh.remesh_enabled and cfg.mesh.remesh_min_edge_ratio > 0
-                              and split_count >= 1 and not collapse_exhausted)
+                              and self.split_count >= 1 and not self.collapse_exhausted)
             last, remesh_kind = self._run_until_remesh_or_done(
                 verts, tris, boundary_idx, mask, start_iter, total_iters,
-                V0, L0, check_split, check_collapse, epoch, quasi, t_start, cc_block_until, diag,
+                V0, L0, check_split, check_collapse, epoch, quasi, t_start, self.cc_block_until, diag,
             )
             start_iter, verts, _, _, _, _ = last
             # topology that belongs to `last` (a remesh below renumbers)
@@ -353,8 +403,8 @@ class Driver:
                     verts, tris, boundary_idx = subdivide_mesh(verts, tris, boundary_idx)
                     kind = "global split"
                 mask = build_dof_mask(len(verts), boundary_idx)
-                split_count += 1
-                self._log(f"        [{kind} #{split_count} at iteration {start_iter}: "
+                self.split_count += 1
+                self._log(f"        [{kind} #{self.split_count} at iteration {start_iter}: "
                           f"distortion {distortion:.2f}x, {n_before} -> {len(tris)} triangles]")
             elif remesh_kind == "collapse":
                 n_before = len(tris)
@@ -384,7 +434,7 @@ class Driver:
                     # No collapse was actually safe to perform (only the
                     # permanent apex spokes remain below threshold) --
                     # don't keep re-triggering this no-op.
-                    collapse_exhausted = True
+                    self.collapse_exhausted = True
                     self._log(f"        [collapse at iteration {start_iter}: no safe collapses "
                               f"found (likely just the apex spokes) -- disabling further collapse checks]")
                 else:
@@ -411,7 +461,7 @@ class Driver:
                     # nothing was collapsed: keep the mesh as it is (no cleanup, no new epoch) and do
                     # not re-trigger for a while -- every trigger restarts the solver (new factorization)
                     # and, in quasi-static mode, interrupts the convergence test of the step
-                    cc_block_until = start_iter + 10 * cfg.mesh.remesh_check_every
+                    self.cc_block_until = start_iter + 10 * cfg.mesh.remesh_check_every
                     remesh_kind = None
                     verts, tris, boundary_idx = orig_state
                 else:
@@ -430,11 +480,12 @@ class Driver:
                     verts, tris, boundary_idx = add_base_mesh(verts, tris, boundary_idx)
                 mask = build_dof_mask(len(verts), boundary_idx)
                 epoch += 1
+                self.epoch = epoch
                 if quasi is not None:
                     quasi.on_remesh()      # the rollback state belongs to the old mesh
                 sc_now = last[4]
                 self._event(Event("remesh", int(start_iter), message=remesh_kind, data={
-                    "kind": remesh_kind, "epoch": epoch,
+                    "remesh_kind": remesh_kind, "epoch": epoch,
                     "n_verts_before": n_verts_before, "n_verts_after": len(verts),
                     "n_tris_before": n_tris_before, "n_tris_after": len(tris),
                     "verts": readonly(verts), "tris": readonly(tris), "boundary_idx": readonly(boundary_idx),
@@ -444,9 +495,10 @@ class Driver:
 
         elapsed = time.perf_counter() - t0
         i, verts_final, Af, Vf, c_fin, loop_fin = last
-        if Af is None:   # stopped before the first iteration was yielded
+        ran = Af is not None
+        if not ran:   # no iteration was run (stopped at once, or a restart with nothing left to do)
             i, verts_final, Af, Vf = start_iter, verts, A0, V0
-        if self._last_frame_iter != int(i):
+        if ran and self._last_frame_iter != int(i):
             # make sure the final state is recorded (e.g. after a stop, or when
             # n_iterations is not a multiple of output.every)
             self._emit_frame(i, verts_final, tris_last, boundary_last, Af, Vf, c_fin, loop_fin,
@@ -474,6 +526,9 @@ class Driver:
             self._log(f"        Remeshed {epoch}x, final resolution: "
                       f"{len(verts_final)} vertices, {len(tris_last)} triangles"
                       + (f" ({len(tris_last) - n_base} dome + {n_base} base)" if n_base else ""))
+
+        # restart point: the state the next relax() call would start from
+        self._checkpoint(start_iter, verts, tris, boundary_idx, quasi)
 
         summary = {
             "iteration": int(i),
