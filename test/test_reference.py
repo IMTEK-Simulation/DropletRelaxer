@@ -53,7 +53,7 @@ def test_quasistatic_restart_is_bit_identical(tmp_path):
     cfg = Config()
     reference_run.SCENARIOS["sphere"](cfg)
     cfg.output.checkpoint_every = 1000
-    path = str(tmp_path / "sphere.h5")
+    path = str(tmp_path / "sphere.vtkhdf")
     writer = H5Writer(path)
     with pytest.raises(KeyboardInterrupt):
         Driver(cfg, sinks=[writer, Kill()]).run()

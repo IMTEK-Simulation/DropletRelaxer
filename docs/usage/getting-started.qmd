@@ -19,23 +19,23 @@ A scenario is a TOML file that sets only what differs from the defaults
 (@sec-usage-configuration). The repository has a few in `examples/`.
 
 ```bash
-droplet-relax run examples/sessile.toml -o sessile.h5     # headless, writes the run file
-droplet-relax info sessile.h5                              # summary
-droplet-view sessile.h5                                    # window: replay with history slider
-droplet-view sessile.h5 --video sessile.mp4                # the replay as a video, no window
+droplet-relax run examples/sessile.toml -o sessile.vtkhdf  # headless, writes the run file
+droplet-relax info sessile.vtkhdf                          # summary
+droplet-view sessile.vtkhdf                                # window: replay with history slider
+droplet-view sessile.vtkhdf --video sessile.mp4            # the replay as a video, no window
 droplet-view live examples/default.toml                    # solver + live window in one process
 ```
 
-`droplet-view live` writes the run to `runs/<timestamp>/run.h5` (or `-o`)
+`droplet-view live` writes the run to `runs/<timestamp>/run.vtkhdf` (or `-o`)
 while showing it; after the run the window replays that file. The Stop button
-or closing the window ends the run cleanly. `droplet-view run.h5 --follow`
+or closing the window ends the run cleanly. `droplet-view run.vtkhdf --follow`
 watches a run file that another process (e.g. a cluster job on a shared file
 system) is still writing.
 
 Any parameter can be overridden on the command line, in TOML syntax:
 
 ```bash
-droplet-relax run examples/default.toml -o theta120.h5 --set solver.contact_angle_deg=120 \
+droplet-relax run examples/default.toml -o theta120.vtkhdf --set solver.contact_angle_deg=120 \
     --set obstacle.center_end=[30,0,125]
 droplet-relax show-config examples/default.toml     # the complete effective configuration, documented
 ```
@@ -51,7 +51,7 @@ written every `output.checkpoint_every` iterations, so a killed run loses at
 most that many. Continue with
 
 ```bash
-droplet-relax restart run.h5 [--set solver.n_iterations=2000000]
+droplet-relax restart run.vtkhdf [--set solver.n_iterations=2000000]
 ```
 
 A restart continues bit-identically to an uninterrupted run. Only

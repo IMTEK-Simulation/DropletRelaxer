@@ -12,7 +12,7 @@ same process with a live window; it depends on DropletRelaxer, PyVista and VTK.
 The solver never imports the viewer.
 
 ```
-  scenario.toml ──► droplet-relax (DropletRelaxer.driver) ──► run.h5 (VTKHDF + /DropletRelaxer)
+  scenario.toml ──► droplet-relax (DropletRelaxer.driver) ──► run.vtkhdf (VTKHDF + /DropletRelaxer)
                                                                    │
                        ParaView / any VTK ◄────────────────────────┤
                        droplet-view (replay, --follow, --video) ◄──┘

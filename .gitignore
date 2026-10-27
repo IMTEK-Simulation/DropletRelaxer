@@ -5,6 +5,7 @@ venv/
 .venv/
 runs/
 *.h5
+*.vtkhdf
 *.mp4
 *.gif
 docs/_book/

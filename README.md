@@ -32,17 +32,17 @@ pip install -e viewer       # viewer (desktop only)
 ## Quick start
 
 ```bash
-droplet-view live examples/default.toml                  # solver + live window
-droplet-relax run examples/sessile.toml -o sessile.h5    # headless
-droplet-view sessile.h5                                  # replay with history slider, Play, Save (video)
-droplet-view sessile.h5 --video sessile.mp4              # video without a window
-droplet-relax show-config                                # every parameter, documented
+droplet-view live examples/default.toml                    # solver + live window
+droplet-relax run examples/sessile.toml -o sessile.vtkhdf  # headless
+droplet-view sessile.vtkhdf                                # replay with history slider, Play, Save (video)
+droplet-view sessile.vtkhdf --video sessile.mp4            # video without a window
+droplet-relax show-config                                  # every parameter, documented
 ```
 
 Scenarios are TOML files that set only what differs from the defaults; any
 value can be overridden with `--set section.key=value`, which makes parameter
 sweeps on a cluster a job array (`examples/slurm_contact_angle_sweep.sh`).
-`droplet-relax restart run.h5` continues a run from its checkpoint,
+`droplet-relax restart run.vtkhdf` continues a run from its checkpoint,
 bit-identically to an uninterrupted run.
 
 ## Documentation

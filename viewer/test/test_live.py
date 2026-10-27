@@ -73,7 +73,7 @@ def test_droplet_view_live_off_screen_writes_and_replays(tmp_path):
     cfg = short_cfg()
     scen = tmp_path / "s.toml"
     scen.write_text(dumps(cfg, viewer={"off_screen": True}))
-    out = tmp_path / "run.h5"
+    out = tmp_path / "run.vtkhdf"
     subprocess.run([sys.executable, "-m", "DropletViewer.cli", "live", str(scen), "-o", str(out)],
                    check=True, capture_output=True)
     with RunFile(str(out)) as rf:

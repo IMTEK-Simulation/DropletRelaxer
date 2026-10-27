@@ -61,5 +61,5 @@ break the window again, pin it in your environment
 ## Headless machines
 
 The solver needs no display at all. For pictures on a headless machine use
-`droplet-view run.h5 --video out.mp4`, which renders off screen (on Linux
+`droplet-view run.vtkhdf --video out.mp4`, which renders off screen (on Linux
 servers via EGL/OSMesa, or under `xvfb-run`).

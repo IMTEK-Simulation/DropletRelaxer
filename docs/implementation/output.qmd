@@ -22,5 +22,5 @@ Window and charts are only updated when a step has converged; in between a progr
 **Save.** After a run, the Save button (next to Play) records the replay into
 `run.mp4` in the run's folder (imageio with ffmpeg, falling back to GIF; up to
 `video_max_frames` $=600$ frames), plus `frames.csv` (one row per sphere step)
-in quasi-static mode. `droplet-view run.h5 --video out.mp4` does the same without
+in quasi-static mode. `droplet-view run.vtkhdf --video out.mp4` does the same without
 a window. All numbers are in the run file; there is no separate data export.

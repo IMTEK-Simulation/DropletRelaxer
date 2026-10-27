@@ -33,7 +33,7 @@ def cfg_with_checkpoints():
 
 
 def test_round_trip(tmp_path):
-    path = tmp_path / "run.h5"
+    path = tmp_path / "run.vtkhdf"
     rec = Recorder()
     Driver(cfg_with_checkpoints(), sinks=[rec, H5Writer(str(path), viewer_table={"colormap": "viridis"})]).run()
     with RunFile(str(path)) as rf:
@@ -78,7 +78,7 @@ def test_restart_after_kill_reproduces_uninterrupted_run(tmp_path):
     rec_full = Recorder()
     full = Driver(cfg_with_checkpoints(), sinks=[rec_full]).run()
 
-    path = str(tmp_path / "run.h5")
+    path = str(tmp_path / "run.vtkhdf")
     writer = H5Writer(path)
     with pytest.raises(KeyboardInterrupt):
         Driver(cfg_with_checkpoints(), sinks=[writer, Kill(370)]).run()
@@ -99,7 +99,7 @@ def test_restart_after_kill_reproduces_uninterrupted_run(tmp_path):
 
 
 def test_restart_with_more_iterations_continues(tmp_path):
-    path = str(tmp_path / "run.h5")
+    path = str(tmp_path / "run.vtkhdf")
     Driver(cfg_with_checkpoints(), sinks=[H5Writer(path)]).run()
     longer = cfg_with_checkpoints()
     longer.solver.n_iterations = 600
@@ -143,7 +143,7 @@ def test_cli_run_info_restart(tmp_path):
     cfg = short_cfg()
     cfg.solver.n_iterations = 200
     scen.write_text(dumps(cfg))
-    out = str(tmp_path / "s.h5")
+    out = str(tmp_path / "s.vtkhdf")
     cli = [sys.executable, "-m", "DropletRelaxer.cli"]
     subprocess.run(cli + ["run", str(scen), "-o", out, "-q"], check=True, capture_output=True)
     again = subprocess.run(cli + ["run", str(scen), "-o", out, "-q"], capture_output=True, text=True)
@@ -165,7 +165,7 @@ def test_follow_reads_a_file_while_it_is_written(tmp_path):
     cfg.solver.n_iterations = 3000
     cfg.output.every = 50
     scen.write_text(dumps(cfg))
-    out = tmp_path / "s.h5"
+    out = tmp_path / "s.vtkhdf"
     proc = subprocess.Popen([sys.executable, "-m", "DropletRelaxer.cli", "run", str(scen), "-o", str(out), "-q"],
                             stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
     seen, rf, t0 = [], None, time.time()

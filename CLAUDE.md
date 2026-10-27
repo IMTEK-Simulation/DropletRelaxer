@@ -24,9 +24,9 @@ DROPLET_REFERENCE_HASH=1 pytest -m slow test/test_reference.py      # also bit i
 python tools/reference_run.py # re-record test/reference/*.json -- only when numerics change on purpose, own commit
 pre-commit run --all-files    # flake8 (.flake8, max line 120)
 
-droplet-relax run examples/sessile.toml -o run.h5 [--set solver.contact_angle_deg=120]
-droplet-relax restart run.h5 | info run.h5 | show-config [scenario.toml]
-droplet-view run.h5 [--follow | --video out.mp4]
+droplet-relax run examples/sessile.toml -o run.vtkhdf [--set solver.contact_angle_deg=120]
+droplet-relax restart run.vtkhdf | info run.vtkhdf | show-config [scenario.toml]
+droplet-view run.vtkhdf [--follow | --video out.mp4]
 droplet-view live examples/default.toml
 
 pip install -e ".[docs]" -e viewer && quarto render docs --to pdf    # QUARTO_PYTHON=<venv python> if needed

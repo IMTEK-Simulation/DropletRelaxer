@@ -14,7 +14,7 @@ bit-identically.
   with a checkpoint; bit-identical restarts.
 - Run file: HDF5 in the VTKHDF layout (opens in ParaView), written in SWMR
   mode so `droplet-view --follow` can watch a running job.
-- `droplet-view run.h5 [--follow | --video out.mp4]` and `droplet-view live
+- `droplet-view run.vtkhdf [--follow | --video out.mp4]` and `droplet-view live
   scenario.toml` (solver in-process with the live window, Stop button).
 - The Save button records the replay video; the `.npy` export is gone (all
   data is in the run file).

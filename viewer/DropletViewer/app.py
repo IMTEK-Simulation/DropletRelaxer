@@ -96,7 +96,7 @@ def export_video(path, out, overrides=()):
 
 def live(config_path, overrides=(), output=None, force=False):
     """Runs a scenario with the live window (solver in this process). The run
-    is always written to a file (default runs/<timestamp>/run.h5); after the
+    is always written to a file (default runs/<timestamp>/run.vtkhdf); after the
     run the window replays it."""
     import sys
 
@@ -112,7 +112,7 @@ def live(config_path, overrides=(), output=None, force=False):
     cfg, table = load(config_path, overrides) if config_path else loads("", overrides)
     vcfg = from_table(table.get("viewer"))
     if output is None:
-        output = os.path.join("runs", time.strftime("%Y%m%d_%H%M%S"), "run.h5")
+        output = os.path.join("runs", time.strftime("%Y%m%d_%H%M%S"), "run.vtkhdf")
     if os.path.exists(output) and not force:
         raise SystemExit(f"{output} exists; use --force to overwrite it")
     os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
