@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 (not yet released)
 
 Restructuring into a headless solver and a separate viewer (see
 `RESTRUCTURING_PLAN.md`). Numerics unchanged: the reference runs reproduce
