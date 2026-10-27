@@ -1,8 +1,8 @@
 """Command line: `droplet-relax`.
 
-    droplet-relax run scenario.toml -o run.h5 [--set solver.contact_angle_deg=120 ...]
-    droplet-relax restart run.h5 [--set solver.n_iterations=2000000]
-    droplet-relax info run.h5
+    droplet-relax run scenario.toml -o run.vtkhdf [--set solver.contact_angle_deg=120 ...]
+    droplet-relax restart run.vtkhdf [--set solver.n_iterations=2000000]
+    droplet-relax info run.vtkhdf
     droplet-relax show-config [scenario.toml] [--set ...]
 
 SIGTERM (sent by SLURM before a wall-time kill) and the first Ctrl-C end a

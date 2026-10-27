@@ -17,7 +17,7 @@ from test_driver import Recorder, short_cfg  # noqa: E402
 
 
 def test_vtkhdf_reader_sees_every_frame(tmp_path):
-    path = str(tmp_path / "run.h5")
+    path = str(tmp_path / "run.vtkhdf")
     rec = Recorder()
     Driver(short_cfg(), sinks=[rec, H5Writer(path)]).run()
     r = vtk.vtkHDFReader()

@@ -3,7 +3,7 @@
 # each writing its own run file. SLURM sends SIGTERM before the wall-time
 # limit; droplet-relax then finishes the iteration and writes a checkpoint,
 # so a run that did not finish can be continued with
-#     droplet-relax restart angle_<theta>.h5
+#     droplet-relax restart angle_<theta>.vtkhdf
 #
 #     sbatch examples/slurm_contact_angle_sweep.sh
 #
@@ -20,5 +20,5 @@ THETA=${ANGLES[$SLURM_ARRAY_TASK_ID]}
 # one thread per run: the job array provides the parallelism
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 
-srun droplet-relax run examples/default.toml -o "angle_${THETA}.h5" --quiet \
+srun droplet-relax run examples/default.toml -o "angle_${THETA}.vtkhdf" --quiet \
     --set "solver.contact_angle_deg=${THETA}"

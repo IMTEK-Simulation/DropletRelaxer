@@ -60,7 +60,7 @@ checkpoint are dropped and written again.
 ```python
 from DropletRelaxer.io.reader import RunFile
 
-with RunFile("run.h5") as rf:
+with RunFile("run.vtkhdf") as rf:
     s = rf.series()                 # per-frame scalars as arrays: energy, force (N, 3), ...
     last = rf.frame(-1)             # a Frame: verts, tris, boundary_idx, curvature, ...
     cfg, table = rf.config()        # the scenario as given

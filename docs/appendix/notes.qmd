@@ -12,7 +12,7 @@ as follows:
 | `config.py`, `CONFIG` | `DropletRelaxer.config`, scenario TOML files |
 | `VisConfig` | `DropletViewer.config.ViewerConfig` (`[viewer]` table) |
 | `VisConfig.render_every` | `OutputConfig.every` (`[output]` table) |
-| `VisConfig.live_mode = "end_only"` | `droplet-relax run` followed by `droplet-view run.h5` |
+| `VisConfig.live_mode = "end_only"` | `droplet-relax run` followed by `droplet-view run.vtkhdf` |
 | `visualize.py` | `DropletViewer.scene`, `.charts`, `.history`, `.live` |
 | `export.py`, Save button folder with `.npy` files | the run file (@sec-file-format); Save records the video |
 | `run.sh`, `python main.py` | `droplet-view live scenario.toml` |

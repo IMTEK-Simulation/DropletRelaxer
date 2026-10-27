@@ -5,7 +5,7 @@
 # Every key that is not set here takes its default; see all of them with
 #     droplet-relax show-config
 #
-#     droplet-relax run examples/default.toml -o default.h5
+#     droplet-relax run examples/default.toml -o default.vtkhdf
 #     droplet-view live examples/default.toml
 
 [viewer]

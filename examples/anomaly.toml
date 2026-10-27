@@ -1,7 +1,7 @@
 # Sphere dragged across a circular hydrophobic spot on an otherwise smooth
 # wall (wettability anomaly, see anomaly.py).
 #
-#     droplet-relax run examples/anomaly.toml -o anomaly.h5
+#     droplet-relax run examples/anomaly.toml -o anomaly.vtkhdf
 
 [roughness]
 enabled = false

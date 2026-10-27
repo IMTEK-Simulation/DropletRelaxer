@@ -33,7 +33,7 @@ class LiveWindow(NullSink):
 
     With `run_file` (the path an H5Writer earlier in the sink list writes),
     the history slider replays that file after the run, exactly as
-    `droplet-view run.h5` does, and only the per-frame scalars are kept in
+    `droplet-view run.vtkhdf` does, and only the per-frame scalars are kept in
     memory. Without it, the recorded frames are kept in memory."""
 
     def __init__(self, vcfg=None, save_dir=None, run_file=None, event_interval=0.1, progress_interval=1.0):

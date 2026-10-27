@@ -1,9 +1,9 @@
 """Command line: `droplet-view`.
 
-    droplet-view run.h5                    replay a run (history slider, Play, Save)
-    droplet-view run.h5 --follow           watch a run that is still being written
-    droplet-view run.h5 --video out.mp4    render the replay into a video, no window
-    droplet-view live scenario.toml        run the solver in this process with a live window
+    droplet-view run.vtkhdf                    replay a run (history slider, Play, Save)
+    droplet-view run.vtkhdf --follow           watch a run that is still being written
+    droplet-view run.vtkhdf --video out.mp4    render the replay into a video, no window
+    droplet-view live scenario.toml            run the solver in this process with a live window
 
 --software-gl selects Mesa's software OpenGL (llvmpipe) before VTK is
 loaded: slower, but it works when the GPU driver is not usable.
@@ -40,11 +40,11 @@ def _display_hints(software_gl):
 def build_parser():
     p = argparse.ArgumentParser(prog="droplet-view", description="View DropletRelaxer runs.")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    p.add_argument("target", help="run file (.h5), or 'live' followed by a scenario TOML file")
+    p.add_argument("target", help="run file (.vtkhdf), or 'live' followed by a scenario TOML file")
     p.add_argument("config", nargs="?", help="with 'live': the scenario TOML file (default: all defaults)")
     p.add_argument("--follow", action="store_true", help="keep up with a run that is still being written")
     p.add_argument("--video", metavar="OUT", help="render the replay into a video file instead of opening a window")
-    p.add_argument("-o", "--output", help="with 'live': run file to write (default runs/<timestamp>/run.h5)")
+    p.add_argument("-o", "--output", help="with 'live': run file to write (default runs/<timestamp>/run.vtkhdf)")
     p.add_argument("--force", action="store_true", help="with 'live': overwrite an existing output file")
     p.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
                    help="override a config value; with a run file only viewer.* (repeatable)")
