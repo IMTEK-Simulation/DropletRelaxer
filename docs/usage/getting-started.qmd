@@ -8,10 +8,16 @@ repository. On a cluster, install only the solver:
 ```bash
 git clone https://github.com/IMTEK-Simulation/DropletRelaxer.git
 cd DropletRelaxer
-python -m venv venv && source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate
 pip install -e .               # DropletRelaxer: numpy, scipy, h5py
 pip install -e viewer          # DropletViewer: + pyvista, vtk, imageio (for a desktop)
 ```
+
+If you use Anaconda/Miniconda, run `conda deactivate` before creating the venv
+(or create it with `/usr/bin/python3 -m venv venv`). A venv built on Conda's
+Python loads Conda's C++ runtime, which can keep the system's OpenGL driver from
+loading, so that `droplet-view` crashes on startup
+(@sec-troubleshooting).
 
 ## Running a scenario
 

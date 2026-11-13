@@ -34,9 +34,36 @@ glxinfo | grep "OpenGL renderer"
 similar), Conda's `LD_LIBRARY_PATH` points at its own `libstdc++`/X11
 libraries, which can shadow the system's Mesa/OpenGL libraries for any process
 started from that shell -- also inside an unrelated venv. Run `conda
-deactivate` first, or `env -u LD_LIBRARY_PATH droplet-view ...`. A venv built on
-Conda's Python loads Conda's libraries even then: build the venv with the
-system Python (`/usr/bin/python3 -m venv venv`).
+deactivate` first, or `env -u LD_LIBRARY_PATH droplet-view ...`.
+
+**venv built on Conda's Python.** A venv created with `python -m venv` while
+Conda is active (e.g. a prompt showing both `(venv) (base)`) is based on Conda's
+Python and loads Conda's `libstdc++` even with `LD_LIBRARY_PATH` unset and
+after `conda deactivate`. If that `libstdc++` is older than the one the system's
+Mesa driver was built against, the driver fails to load without any message,
+VTK finds no GLX config at all, and the log shows `Could not find a decent
+config`, the EGL and OSMesa fallbacks failing, and a segmentation fault --
+although `glxinfo` reports a working hardware renderer. Typical on a recent
+Linux distribution with an older Anaconda installation. To check:
+
+```bash
+python -c "import sys; print(sys.base_prefix)"        # a Conda path, e.g. ~/anaconda3
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6 droplet-view run.vtkhdf   # works
+```
+
+If the second command opens the window, rebuild the venv from the system
+Python:
+
+```bash
+conda deactivate
+rm -rf venv
+/usr/bin/python3 -m venv venv && source venv/bin/activate
+pip install -e . -e viewer
+```
+
+(Alternatively keep the venv and add the `export
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libstdc++.so.6` line to the end of
+`venv/bin/activate`.)
 
 **No multisample GLX config.** If X11, a real GPU renderer and `glxgears` all
 work and it still fails, the likely cause is that no multisample

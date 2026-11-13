@@ -24,10 +24,15 @@ Python ≥ 3.12.
 ```bash
 git clone https://github.com/IMTEK-Simulation/DropletRelaxer.git
 cd DropletRelaxer
-python -m venv venv && source venv/bin/activate
+python3 -m venv venv && source venv/bin/activate
 pip install -e .            # solver
 pip install -e viewer       # viewer (desktop only)
 ```
+
+With Anaconda/Miniconda, run `conda deactivate` before creating the venv (or
+use `/usr/bin/python3 -m venv venv`): a venv built on Conda's Python can make
+`droplet-view` crash on startup with `Could not find a decent config`. See
+*Troubleshooting* in the documentation.
 
 ## Quick start
 
