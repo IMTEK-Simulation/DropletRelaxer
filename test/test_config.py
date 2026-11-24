@@ -93,3 +93,56 @@ def test_cli_show_config_and_errors():
     bad = subprocess.run([sys.executable, "-m", "DropletRelaxer.cli", "show-config", "--set", "solver.nope=1"],
                          capture_output=True, text=True)
     assert bad.returncode == 2 and "unknown key" in bad.stderr
+
+
+@pytest.mark.parametrize("command", [["run"], ["restart", "run.vtkhdf"]])
+def test_cli_native_kernels_is_scoped(command, monkeypatch):
+    from DropletRelaxer import cli, _fast
+
+    def run(args):
+        assert args.native_kernels and _fast.use_native_kernels()
+        return 0
+
+    monkeypatch.setattr(_fast, "numba_available", lambda: True)
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    monkeypatch.setattr(cli, "cmd_" + command[0], run)
+    assert cli.main([*command, "--native-kernels"]) == 0
+    assert not _fast.use_native_kernels()
+
+
+@pytest.mark.parametrize("mode", ["flag", "environment", "broken-numba", "old-numba"])
+def test_cli_can_run_without_loading_kernels(mode):
+    code = '''
+import importlib.util
+import os
+import sys
+from types import SimpleNamespace
+
+mode = sys.argv[1]
+os.environ['DROPLET_NATIVE_KERNELS'] = '1' if mode == 'environment' else '0'
+
+class CheckBackend:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == 'numba' and mode == 'broken-numba':
+            return importlib.util.spec_from_loader(fullname, self)
+        if fullname in ('numba', 'DropletRelaxer.kernels'):
+            raise SystemExit(f'unexpected attempt to load {fullname}')
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        raise RuntimeError('incompatible llvmlite')
+
+sys.meta_path.insert(0, CheckBackend())
+if mode == 'old-numba':
+    sys.modules['numba'] = SimpleNamespace(njit=lambda: None, version_info=(0, 62))
+
+from DropletRelaxer.cli import main
+
+args = ['run', '-q', '--set', 'solver.n_iterations=15', '--set', 'anomaly.enabled=true']
+if mode == 'flag':
+    args.append('--native-kernels')
+raise SystemExit(main(args))
+'''
+    subprocess.run([sys.executable, "-B", "-c", code, mode], check=True, timeout=30)

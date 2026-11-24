@@ -5,6 +5,8 @@ circle at z=0), built as a refined hemisphere triangulation.
 
 import numpy as np
 
+from . import _fast
+
 from .energy import cross3, row_norm, scatter_add_rows
 from .wetting import unique_edges
 
@@ -130,6 +132,13 @@ def make_start_mesh(mesh_cfg):
     """Starting cone according to MeshConfig.mesh_type, uniformly
     rescaled to MeshConfig.target_volume if that's set (see
     resolve_volume_scale/its docstring on MeshConfig)."""
+    return _make_start_mesh_with_topology(mesh_cfg)[:3]
+
+
+def _make_start_mesh_with_topology(mesh_cfg, *, reuse_topology=False):
+    reuse_topology = reuse_topology and not _fast.use_native_kernels()
+    from .substrate import _add_base_mesh_with_topology
+
     verts, tris, boundary_idx = _build_shape(mesh_cfg)
     s = resolve_volume_scale(mesh_cfg)
     if s != 1.0:
@@ -138,9 +147,9 @@ def make_start_mesh(mesh_cfg):
         # Close the fluid with a flat base mesh on the substrate (see
         # substrate.py). Its volume contribution is exactly zero (all its
         # vertices have z = 0), so V and the dome's dynamics are unchanged.
-        from .substrate import add_base_mesh
-        verts, tris, boundary_idx = add_base_mesh(verts, tris, boundary_idx)
-    return verts, tris, boundary_idx
+        return _add_base_mesh_with_topology(verts, tris, boundary_idx, reuse_topology=reuse_topology)
+    topology = _fast.MeshTopology(verts, tris, boundary_idx) if reuse_topology else None
+    return verts, tris, boundary_idx, topology
 
 
 def build_dof_mask(n_verts, boundary_idx):
@@ -265,8 +274,11 @@ def collapse_short_edges(verts, tris, boundary_idx, min_len, protect_center=None
     are renumbered (removed vertices leave gaps), so boundary_idx is
     remapped to match even though the boundary vertices themselves are
     never removed."""
-    n_verts = verts.shape[0]
     tris = np.asarray(tris)
+    if verts.dtype == np.float64 and tris.dtype == np.int64 == np.dtype(int) and not _fast.use_native_kernels():
+        return _fast.collapse_short_edges(verts, tris, boundary_idx, min_len,
+                                          protect_center, protect_radius, protect_min_len)
+    n_verts = verts.shape[0]
     boundary_idx = np.asarray(boundary_idx)
 
     # --- Collapse candidates, vectorized. Kept in the order in which the
@@ -426,6 +438,8 @@ def tangential_smooth_step(verts, tris, adj, deg, fixed, strength=0.3):
     `adj` is the sparse 0/1 vertex adjacency matrix, `deg` its row sums,
     `fixed` a boolean mask of vertices that must not move (contact line,
     vertices held on the sphere)."""
+    if verts.dtype == np.float64 and not _fast.use_native_kernels():
+        return _fast.tangential_smooth_step(verts, tris, adj, deg, fixed, strength)
     p0, p1, p2 = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
     fn = cross3(p1 - p0, p2 - p0)
     vn = np.zeros_like(verts)
@@ -457,22 +471,28 @@ def tangential_smooth(verts, tris, boundary_idx, strength=0.3, passes=1):
     return verts
 
 
-def _all_edge_lengths(verts, tris):
-    edges = unique_edges(tris)  # each undirected edge once
-    return row_norm(verts[edges[:, 0]] - verts[edges[:, 1]])
+def _all_edge_lengths(verts, tris, *, edges=None):
+    if edges is None:
+        edges = unique_edges(tris)  # each undirected edge once
+    if verts.dtype != np.float64 or _fast.use_native_kernels():
+        return row_norm(verts[edges[:, 0]] - verts[edges[:, 1]])
+    return _fast.numba_kernels().edge_lengths_kernel(
+        np.ascontiguousarray(verts, dtype=np.float64),
+        np.ascontiguousarray(edges, dtype=np.int64),
+    )
 
 
-def mean_edge_length(verts, tris):
+def mean_edge_length(verts, tris, *, edges=None):
     """Used as the reference scale for the remesh-trigger ratio in
     config.py (MeshConfig.remesh_trigger_ratio)."""
-    return _all_edge_lengths(verts, tris).mean()
+    return _all_edge_lengths(verts, tris, edges=edges).mean()
 
 
-def max_edge_length(verts, tris):
+def max_edge_length(verts, tris, *, edges=None):
     """Used as the live distortion metric that triggers a remesh (see
     subdivide_mesh) -- the longest edge currently in the mesh, checked
     against remesh_trigger_ratio times the ORIGINAL mean_edge_length."""
-    return _all_edge_lengths(verts, tris).max()
+    return _all_edge_lengths(verts, tris, edges=edges).max()
 
 
 def min_edge_length(verts, tris):
@@ -491,14 +511,14 @@ def min_edge_length(verts, tris):
     return _all_edge_lengths(verts, tris).min()
 
 
-def short_edge_fraction(verts, tris, threshold):
+def short_edge_fraction(verts, tris, threshold, *, edges=None):
     """Fraction of all edges shorter than `threshold` -- the metric
     used to trigger collapse_short_edges (see
     MeshConfig.remesh_min_edge_fraction). Unlike min_edge_length, a
     handful of persistently-short tip edges barely move this fraction,
     so it distinguishes "a genuinely over-refined region exists" from
     "the mesh has its usual few short spokes at the apex"."""
-    lengths = _all_edge_lengths(verts, tris)
+    lengths = _all_edge_lengths(verts, tris, edges=edges)
     return float(np.mean(lengths < threshold))
 
 
@@ -644,6 +664,14 @@ def refine_rivara(verts, tris, boundary_idx, max_len, fine_center=None, fine_rad
         and has not been re-cut since is guaranteed not too long."""
         T = np.array([tri[i] for i in ids])
         Pm = np.array(pos)
+        if not _fast.use_native_kernels():
+            has_fine = fine_len is not None and fine_center is not None
+            center = np.asarray(fine_center, dtype=float) if has_fine else np.zeros(3)
+            flag = _fast.numba_kernels().rivara_prescan_kernel(
+                Pm, T, float(max_len), has_fine, center, float(fine_radius),
+                float(fine_len) if has_fine else float(max_len),
+            )
+            return dict(zip(ids, flag.tolist()))
         flag = np.zeros(len(ids), dtype=bool)
         for k in range(3):
             pa, pb = Pm[T[:, k]], Pm[T[:, (k + 1) % 3]]
@@ -693,9 +721,18 @@ def long_edges_near(verts, tris, center, radius, max_len):
     is longer than `max_len`. Used to trigger proactive refinement
     around the sphere obstacle before the surface there gets
     stretched."""
+    center = np.asarray(center)
+    if verts.dtype == np.float64 and np.result_type(verts, center) == np.float64 and not _fast.use_native_kernels():
+        return bool(_fast.numba_kernels().long_edges_near_kernel(
+            np.ascontiguousarray(verts, dtype=np.float64),
+            np.ascontiguousarray(tris, dtype=np.int64),
+            np.ascontiguousarray(center, dtype=np.float64),
+            float(radius),
+            float(max_len),
+        ))
     e = np.vstack([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]])
     a, b = verts[e[:, 0]], verts[e[:, 1]]
-    near = np.linalg.norm(0.5 * (a + b) - np.asarray(center), axis=1) < radius
+    near = np.linalg.norm(0.5 * (a + b) - center, axis=1) < radius
     return bool(np.any(np.linalg.norm(a - b, axis=1)[near] > max_len))
 
 
@@ -711,7 +748,16 @@ def short_edges_near(verts, tris, center, radius, min_len):
     though the mesh as a WHOLE is nowhere near the global collapse
     trigger (remesh_min_edge_fraction), which local refinement, being
     local, normally never reaches."""
+    center = np.asarray(center)
+    if verts.dtype == np.float64 and np.result_type(verts, center) == np.float64 and not _fast.use_native_kernels():
+        return bool(_fast.numba_kernels().short_edges_near_kernel(
+            np.ascontiguousarray(verts, dtype=np.float64),
+            np.ascontiguousarray(tris, dtype=np.int64),
+            np.ascontiguousarray(center, dtype=np.float64),
+            float(radius),
+            float(min_len),
+        ))
     e = np.vstack([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]])
     a, b = verts[e[:, 0]], verts[e[:, 1]]
-    near = np.linalg.norm(0.5 * (a + b) - np.asarray(center), axis=1) < radius
+    near = np.linalg.norm(0.5 * (a + b) - center, axis=1) < radius
     return bool(np.any(np.linalg.norm(a - b, axis=1)[near] < min_len))

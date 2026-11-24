@@ -81,6 +81,23 @@ def test_rivara_refinement_keeps_geometry_exactly(rng):
     assert cnt.max() <= 2
 
 
+def test_rivara_float32_uses_same_float64_working_mesh(monkeypatch):
+    from DropletRelaxer import _fast
+    from kernel_parity_helpers import assert_bits
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+    v, t, b = _dome(n_rings=3)
+    v = v.astype(np.float32)
+    args = (v, t, b, 0.4, np.array([0, 0, 0.7], dtype=np.float32), 0.3, 0.2)
+    with _fast.kernel_mode(native=True):
+        expected = refine_rivara(*args)
+    assert expected[0].dtype == np.float64 and len(expected[1]) > len(t)
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    for got, want in zip(refine_rivara(*args), expected, strict=True):
+        assert_bits(got, want)
+
+
 def test_edge_collapse_keeps_topology_and_nearly_the_geometry(rng):
     v, t, b = _dome(rng, n_rings=8, noise=0.02)
     v, t, b = subdivide_mesh(v, t, b)
@@ -113,3 +130,142 @@ def test_tangential_smoothing_changes_neither_area_nor_volume_noticeably(rng):
     # the point of it: triangles become more uniform
     assert (np.std(np.linalg.norm(vs[t[:, 0]] - vs[t[:, 1]], axis=1))
             <= np.std(np.linalg.norm(vp[t[:, 0]] - vp[t[:, 1]], axis=1)))
+
+
+def test_float32_relax_uses_native_promotion(monkeypatch):
+    from DropletRelaxer import _fast
+    from DropletRelaxer.config import SolverConfig
+    from DropletRelaxer.mesh import build_dof_mask
+    from DropletRelaxer.solver import relax
+    from kernel_parity_helpers import assert_bits
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+    v, t, ring = _dome(n_rings=3)
+    v = v.astype(np.float32)
+    args = (v, t, ring, build_dof_mask(len(v), ring), SolverConfig(n_iterations=2))
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    actual = []
+    for _, coords, area, volume, _, _ in relax(*args):
+        assert not _fast.use_native_kernels()  # no mode leak while the generator is suspended
+        actual.append((coords, area, volume))
+    with _fast.kernel_mode(native=True):
+        expected = [(coords, area, volume) for _, coords, area, volume, _, _ in relax(*args)]
+    assert len(actual) == len(expected) == 3
+    assert actual[1][0].dtype == np.float64
+    for frame, ref in zip(actual, expected):
+        for got, want in zip(frame, ref):
+            assert_bits(got, want)
+
+
+@pytest.mark.parametrize("do_collapse", [False, True])
+def test_collapse_with_int32_triangles_preserves_numpy_dtypes(do_collapse, monkeypatch):
+    from DropletRelaxer import _fast
+    from kernel_parity_helpers import assert_bits
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+    v, t, ring = _dome()
+    threshold = mean_edge_length(v, t) if do_collapse else 0.0
+    args = (v, t.astype(np.int32), ring, threshold)
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    actual = collapse_short_edges(*args)
+    with _fast.kernel_mode(native=True):
+        expected = collapse_short_edges(*args)
+    assert (len(actual[1]) < len(t)) == do_collapse
+    for got, want in zip(actual, expected):
+        assert_bits(got, want)
+
+
+def test_moving_wetting_sphere_matches_at_every_yield(monkeypatch):
+    from DropletRelaxer import _fast
+    from DropletRelaxer.solver import relax
+    from kernel_parity_helpers import assert_bits
+    from runhelpers import scaled_setup, static_cfg
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+
+    cfg = static_cfg(angle_deg=120.0, sphere=True, n_iter=128)
+    cfg.obstacle.center_end = (0.2, *cfg.obstacle.center_start[1:])
+    cfg.obstacle.wetting_contact_angle_deg = 120.0
+    diag = {}
+
+    def states():
+        diag.clear()
+        for state in relax(v, tris, ring, mask, cfg.solver, cfg.obstacle, V_target=volume, diag=diag):
+            yield (*state, diag.get("force"))
+
+    with _fast.kernel_mode(native=True):
+        v, tris, ring, mask, volume = scaled_setup(cfg)
+        reference = list(states())
+    assert [state[0] for state in reference] == list(range(cfg.solver.n_iterations + 1))
+    assert not np.array_equal(reference[0][4], reference[-1][4])
+    assert any(loop is not None and np.any(force) for _, _, _, _, _, loop, force in reference)
+
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    for actual, expected in zip(states(), reference, strict=True):
+        for field, got, want in zip(("iteration", "verts", "area", "volume", "center", "loop", "force"),
+                                    actual, expected, strict=True):
+            try:
+                if got is None or want is None:
+                    assert got is want
+                else:
+                    assert_bits(got, want)
+            except AssertionError as err:
+                raise AssertionError(f"iteration {expected[0]}: {field} differs") from err
+
+
+@pytest.mark.parametrize("case", ["sessile", "wetting-sphere", "anomaly", "roughness"])
+def test_native_kernels_flag_is_bit_identical(case, monkeypatch):
+    from DropletRelaxer import _fast
+    from DropletRelaxer.driver import Driver
+    from kernel_parity_helpers import assert_bits
+    from test_driver import Recorder, short_cfg
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+
+    def run():
+        cfg = short_cfg(430 if case == "sessile" else 200)
+        if case == "wetting-sphere":
+            cfg.obstacle.enabled = True
+            cfg.obstacle.center_end = cfg.obstacle.center_start
+            cfg.obstacle.wetting_contact_angle_deg = 120.0
+            cfg.output.every = 10
+        elif case == "anomaly":
+            cfg.anomaly.enabled = True
+            cfg.anomaly.contact_angle_deg = 75.0
+            cfg.anomaly.radius = 40.0
+            cfg.anomaly.center_xy = (15.0, -4.0)
+        elif case == "roughness":
+            cfg.roughness.enabled = True
+            cfg.roughness.mode = "chemical"
+        rec = Recorder()
+        result = Driver(cfg, sinks=[rec]).run()
+        assert result["iteration"] == cfg.solver.n_iterations
+        if case == "sessile":
+            assert result["remeshes"] >= 2
+        if case == "wetting-sphere":
+            assert any(frame.wetted_loop is not None for frame in rec.frames)
+            assert np.any(rec.frames[-1].force != 0.0)
+        return rec.frames
+
+    def unexpected_fast_solver(*args):
+        pytest.fail("native solver mode entered the fast solver adapter")
+
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    fast = run()
+    _fast.set_native_kernels(True)
+    monkeypatch.setattr(_fast, "numba_kernels", unexpected_fast_solver)
+    native = run()
+    assert len(fast) == len(native)
+    keys = ("verts", "tris", "energy", "area", "volume", "force", "boundary_idx", "wetted_loop")
+    for accelerated, reference in zip(fast, native):
+        assert (accelerated.iteration, accelerated.epoch) == (reference.iteration, reference.epoch)
+        for key in keys:
+            a, b = getattr(accelerated, key), getattr(reference, key)
+            if a is None or b is None:
+                assert a is b, key
+            else:
+                assert_bits(a, b)

@@ -33,3 +33,47 @@ Numerical devices (not derived from the energy; they change the path or mesh qua
 
 **Model limitations (measured).** The wetted vertices are held by a *bilateral* constraint and detach only through remeshing. A wall-ring hysteresis of about $4\%$ remains at $\theta_Y=120^\circ$; it is independent of the speed and its cause is not isolated.
 The relaxation is a pseudo-time process without inertia, viscosity or contact-line friction.
+
+## Optional CPU acceleration {#sec-optional-cpu-acceleration}
+
+The compiled backend shares the dome edge list and flat-base factorization
+between mesh setup, relaxation and remesh checks while the connectivity stays
+fixed. This setup is rebuilt after a remesh or restart and is never shared across
+runs or stored in checkpoints. Native mode bypasses the caches introduced by
+this backend; it still uses the existing NumPy/SciPy caches.
+
+The `fast` installation extra enables the optional Numba CPU backend.
+The compiled functions live in `kernels.py`; `_fast.py` handles dispatch,
+caching, and Python adapters. The kernel module loads on the
+first accelerated call; explicitly selecting native mode does not import Numba.
+Both backends use the same iteration and SciPy sparse solves.
+The compiled path fuses array passes and caches wetted-patch connectivity and
+anomaly quadrature setup. Both backends retain the original NumPy calculations
+for gradient assembly, the convergence test and the wrapping check. Neither
+backend changes the energy model, convergence tolerance, or remeshing criteria.
+
+The kernels run without fast-math. For ambiguous loop orientations the fast
+path falls back to the original NumPy calculation. Direct solver, energy, and
+edge-metric calls with coordinates other than `float64` also use NumPy for their
+coordinate arithmetic.
+
+Use `--native-kernels` with `droplet-relax run` or `droplet-relax restart`, or set
+`DROPLET_NATIVE_KERNELS=1`, to select the NumPy/SciPy backend. This is also the
+fallback when Numba is missing, older than 0.63, or fails to import. Select the
+backend before starting a run.
+
+### How parity is checked
+
+Kernel tests compare shape, dtype and element bytes (including the sign of
+zero), not a numerical tolerance. For a shortcut with no equivalent numerical
+intermediate, they compare the resulting decision. Seeded cases exercise
+reduction sizes, thresholds one representable step to either side, and tied
+edge candidates. A short moving-sphere test compares each yielded solver state
+and force. A separate slow quasi-static test compares every recorded frame,
+remesh event and the final state for the moving-sphere reference scenario.
+
+Both paths run on the same dependency build in these comparisons. Passing
+checks establish bit-for-bit parity for the tested cases, not a proof for
+all inputs or a guarantee across platforms, NumPy or BLAS builds. The older
+Numba prototype's timings and rounding differences are historical, not results
+for this backend.

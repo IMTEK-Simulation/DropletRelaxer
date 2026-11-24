@@ -37,7 +37,7 @@ limitations stated in Part II, the second adds physics, the third improves nume
 
 *Numerics*
 
-- **Faster and adaptive stepping:** line search, L-BFGS or an adaptive step instead of the fixed $\eta$; compiled kernels or cached topology data for the hot loops (the Numba test gave only $10$--$15\%$, so the Python-level overhead and the remeshing dominate).
+- **Faster and adaptive stepping:** line search, L-BFGS or an adaptive step instead of the fixed $\eta$. The optional backend already compiles hot loops and reuses topology data (@sec-optional-cpu-acceleration) without changing the stepping scheme. The earlier area-and-volume prototype sped up the whole run by only $10$--$15\%$ because much of the cost was in Python overhead and remeshing; future optimizations should be guided by whole-run profiling.
 
 - **Mesh quality:** edge flips (equiangulation), cotangent-weighted or Lloyd-type tangential regularization instead of the centroid smoothing, and a fully adaptive local collapse with a spatially varying target length (for several obstacles).
 

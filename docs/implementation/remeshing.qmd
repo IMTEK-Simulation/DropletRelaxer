@@ -123,5 +123,9 @@ apex, which would otherwise shrink the trust-region step cap there
 On the earlier default run (2500 iterations, no window) of about $25$ s, the relaxation took about $63\%$ and remeshing about $35\%$ of the time.
 Two changes reduced it to $19$--$21$ s with bit-identical results (area, volume, radius and $41$ remeshings unchanged):
 `collapse_short_edges` was rewritten with a CSR adjacency in `numpy` and lazily built per-vertex neighbour sets (identical output on $215$ recorded real calls; local $3.5\to0.6$ s, global $1.9\to0.6$ s),
-and edge extraction uses integer keys (`wetting.unique_edges`, $3$--$4\times$ faster). Skipping the wetting step gave no gain (contact in about $85\%$ of the iterations, patch about $450$ of $2200$ vertices);
-compiling the kernels with Numba made them $9\times$ faster but the whole run only $10$--$15\%$, so it is not enabled.
+and edge extraction uses integer keys (`wetting.unique_edges`, $3$--$4\times$ faster). Skipping the wetting step gave no gain (contact in about $85\%$ of the iterations, patch about $450$ of $2200$ vertices).
+
+An earlier Numba prototype limited to area and volume made those kernels
+$9\times$ faster but sped up the whole run by only $10$--$15\%$. These are
+historical measurements, not benchmarks of the current optional backend
+(@sec-optional-cpu-acceleration).

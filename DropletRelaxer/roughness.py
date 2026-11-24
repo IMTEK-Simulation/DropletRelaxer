@@ -44,6 +44,8 @@ import math
 import warnings
 import numpy as np
 
+from . import _fast
+
 
 _GAUSS_X, _GAUSS_W = np.polynomial.legendre.leggauss(4)
 _GAUSS_X = 0.5 * (_GAUSS_X + 1.0)
@@ -141,6 +143,23 @@ class RoughnessField:
 
     def wetted_integral_and_grad(self, verts, loop):
         """I = Integral_wetted delta_kappa dA and dI/dverts (n_verts, 3; xy only)."""
+        if verts.dtype == np.float64 and not _fast.use_native_kernels():
+            I, grad, outside = _fast.numba_kernels().roughness_wetted_integral_kernel(
+                np.ascontiguousarray(verts, dtype=np.float64),
+                np.ascontiguousarray(loop, dtype=np.int64),
+                float(self.x0),
+                float(self.dx),
+                int(self.N),
+                self._d,
+                self._F,
+                _GAUSS_X,
+                _GAUSS_W,
+            )
+            if outside and not self._warned_outside:
+                warnings.warn("roughness: contact line left the field box "
+                              f"[-{self.L/2:g}, {self.L/2:g}]^2 -- increase RoughnessConfig.box_size")
+                self._warned_outside = True
+            return float(I), grad
         loop = np.asarray(loop)
         P = verts[loop, :2]
         Pn = np.roll(P, -1, axis=0)

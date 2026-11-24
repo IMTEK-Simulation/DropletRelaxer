@@ -21,6 +21,10 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ['3.12', '3.13', '3.14']
+        extras: [test]
+        include:
+          - python-version: '3.13'
+            extras: 'test,fast'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +33,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[test]"
+      - run: python -m pip install -e ".[${{ matrix.extras }}]"
+      - name: Verify the optional backend is available
+        if: matrix.extras == 'test,fast'
+        run: python -c "from DropletRelaxer._fast import numba_available; assert numba_available(), 'Numba unavailable'"
       - run: python -m pytest
 
   viewer:
@@ -64,5 +71,9 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[test]"
+      - run: python -m pip install -e ".[test,fast]"
+      - run: python -c "from DropletRelaxer._fast import numba_available; assert numba_available(), 'Numba unavailable'"
       - run: python -m pytest -m slow
+        env:
+          # Keep stored-reference tests on NumPy/SciPy; the parity test selects both backends.
+          DROPLET_NATIVE_KERNELS: '1'

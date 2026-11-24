@@ -31,6 +31,8 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 from scipy.sparse.csgraph import connected_components
+
+from . import _fast
 from .wetting import unique_edges
 
 _MASK_CACHE = {}
@@ -85,7 +87,7 @@ def base_triangle_mask(verts, tris, boundary_idx):
     return mask
 
 
-def _add_base_canonical(verts, tris, boundary_idx, edge_len=None):
+def _add_base_canonical(verts, tris, boundary_idx, edge_len=None, *, reuse_topology=False):
     """Closes an open dome mesh with a flat base triangulation.
 
     The base's boundary is the existing contact-line ring (same vertex
@@ -106,8 +108,9 @@ def _add_base_canonical(verts, tris, boundary_idx, edge_len=None):
     ring's own vertex spacing, so a finely resolved contact line does
     not force a needlessly fine base.
 
-    Returns (verts, tris, boundary_idx) with the base appended (the
-    dome's indices are unchanged)."""
+    Returns (verts, tris, boundary_idx, topology) with the base appended;
+    the dome's indices are unchanged. Topology is None unless reuse_topology
+    is enabled."""
     from scipy.spatial import Delaunay
 
     ring = np.asarray(boundary_idx, dtype=int)
@@ -152,11 +155,15 @@ def _add_base_canonical(verts, tris, boundary_idx, edge_len=None):
 
     # Sanity: every ring edge must be an edge of exactly one base triangle.
     nn = n_dome + len(inner)
-    be = np.sort(np.vstack([base_tris[:, [0, 1]], base_tris[:, [1, 2]], base_tris[:, [2, 0]]]), axis=1)
-    keys, counts = np.unique(be[:, 0] * nn + be[:, 1], return_counts=True)
-    re = np.sort(np.column_stack([ring, np.roll(ring, -1)]), axis=1)
-    cnt = dict(zip(keys.tolist(), counts.tolist()))
-    if any(cnt.get(int(k), 0) != 1 for k in (re[:, 0] * nn + re[:, 1])):
+    if _fast.use_native_kernels():
+        be = np.sort(np.vstack([base_tris[:, [0, 1]], base_tris[:, [1, 2]], base_tris[:, [2, 0]]]), axis=1)
+        keys, counts = np.unique(be[:, 0] * nn + be[:, 1], return_counts=True)
+        re = np.sort(np.column_stack([ring, np.roll(ring, -1)]), axis=1)
+        cnt = dict(zip(keys.tolist(), counts.tolist()))
+        covered = all(cnt.get(int(k), 0) == 1 for k in (re[:, 0] * nn + re[:, 1]))
+    else:
+        covered = _fast.numba_kernels().check_ring_edges_covered_kernel(base_tris, ring, nn)
+    if not covered:
         raise ValueError("could not triangulate the substrate base: a ring edge is not "
                          "covered by exactly one base triangle")
 
@@ -164,8 +171,15 @@ def _add_base_canonical(verts, tris, boundary_idx, edge_len=None):
     new_verts = np.vstack([verts, np.column_stack([np.tile(centre, (len(inner), 1)),
                                                    np.zeros(len(inner))])])
     new_tris = np.vstack([tris, base_tris])
-    emb = BaseEmbedder(new_tris, ring, base_triangle_mask(new_verts, new_tris, ring), len(new_verts))
-    emb.apply(new_verts)
+    boundary_idx = np.asarray(boundary_idx)
+    topology = _fast.MeshTopology(new_verts, new_tris, boundary_idx) if reuse_topology else None
+    if topology is None:
+        base_tri = base_triangle_mask(new_verts, new_tris, ring)
+        embedder = BaseEmbedder(new_tris, ring, base_tri, len(new_verts))
+    else:
+        embedder = topology.embedder
+    if embedder is not None:
+        embedder.apply(new_verts)
 
     # The embedding of a (nearly) convex ring cannot fold; check anyway.
     q0, q1, q2 = new_verts[base_tris[:, 0]], new_verts[base_tris[:, 1]], new_verts[base_tris[:, 2]]
@@ -173,7 +187,7 @@ def _add_base_canonical(verts, tris, boundary_idx, edge_len=None):
     if np.any(sa * orient >= 0):
         raise ValueError("substrate base mesh folded: the contact-line ring is too far from convex "
                          "for the harmonic embedding of the base")
-    return new_verts, new_tris, np.asarray(boundary_idx)
+    return new_verts, new_tris, boundary_idx, topology
 
 
 def _ear_clip_base(verts, tris, boundary_idx):
@@ -232,10 +246,17 @@ def add_base_mesh(verts, tris, boundary_idx, edge_len=None):
     base falls back to an interior-free ear-clipping triangulation of the
     ring (_ear_clip_base), so a droplet that has moved sideways and deformed
     its contact line no longer stops the run."""
+    return _add_base_mesh_with_topology(verts, tris, boundary_idx, edge_len)[:3]
+
+
+def _add_base_mesh_with_topology(verts, tris, boundary_idx, edge_len=None, *, reuse_topology=False):
+    reuse_topology = reuse_topology and not _fast.use_native_kernels()
     try:
-        return _add_base_canonical(verts, tris, boundary_idx, edge_len)
+        return _add_base_canonical(verts, tris, boundary_idx, edge_len, reuse_topology=reuse_topology)
     except ValueError:
-        return _ear_clip_base(verts, tris, boundary_idx)
+        mesh = _ear_clip_base(verts, tris, boundary_idx)
+        topology = _fast.MeshTopology(*mesh) if reuse_topology else None
+        return (*mesh, topology)
 
 
 def strip_base(verts, tris, boundary_idx):
@@ -298,9 +319,12 @@ class BaseEmbedder:
         z = 0), in place; returns `verts`."""
         if self._lu is None:
             return verts
-        xy = verts[:, :2].copy()
-        xy[self._is_int] = 0.0
-        rhs = self._A_int @ xy
+        if _fast.use_native_kernels():
+            xy = verts[:, :2].copy()
+            xy[self._is_int] = 0.0
+            rhs = self._A_int @ xy
+        else:
+            rhs = _fast.base_rhs_fast(self, verts)
         verts[self.interior, :2] = self._lu.solve(rhs)
         verts[self.interior, 2] = 0.0
         return verts

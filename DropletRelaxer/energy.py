@@ -10,6 +10,7 @@ Energy functionals and their analytical gradients:
 import numpy as np
 import scipy.sparse as sp
 
+from . import _fast
 from .substrate import base_triangle_mask
 
 
@@ -61,6 +62,9 @@ def area_and_grad(verts, tris, weights=None, flat_down=None):
     shoelace area of the contact-line ring (and so is its gradient) even if
     the base triangulation has folded (non-convex ring), where the usual
     |cross|/2 would count a folded triangle as positive area."""
+    # Keep NumPy's rounding and output dtypes for non-float64 geometry.
+    if not _fast.use_native_kernels() and verts.dtype == np.float64:
+        return _fast.area_and_grad_fast(verts, tris, weights, flat_down)
     n = verts.shape[0]
     p1, p2, p3 = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
     cross = cross3(p2 - p1, p3 - p1)
@@ -83,6 +87,8 @@ def area_and_grad(verts, tris, weights=None, flat_down=None):
 
 
 def volume_and_grad(verts, tris):
+    if not _fast.use_native_kernels() and verts.dtype == np.float64:
+        return _fast.volume_and_grad_fast(verts, tris)
     n = verts.shape[0]
     p1, p2, p3 = verts[tris[:, 0]], verts[tris[:, 1]], verts[tris[:, 2]]
     c23 = cross3(p2, p3)
@@ -139,6 +145,8 @@ def substrate_wall_energy_and_grad(verts, boundary_loop, kappa):
 
     `boundary_loop` must be the contact-line vertex indices in cyclic
     (ring) order, e.g. the `boundary_idx` returned by `make_cone`."""
+    if verts.dtype == np.float64 and not _fast.use_native_kernels():
+        return _fast.substrate_wall_fast(verts, boundary_loop, kappa)
     idx = np.asarray(boundary_loop)
     x, y = verts[idx, 0], verts[idx, 1]
     x_next, y_next = np.roll(x, -1), np.roll(y, -1)
@@ -169,6 +177,8 @@ def substrate_penetration_energy_and_grad(verts, stiffness):
     activates, but a strong external force (e.g. the sphere obstacle
     pushing down on the surface) can otherwise fold part of the mesh
     underneath the substrate, which is unphysical."""
+    if verts.dtype == np.float64 and not _fast.use_native_kernels():
+        return _fast.substrate_penetration_fast(verts, stiffness)
     z = verts[:, 2]
     below = z < 0.0
     grad = np.zeros_like(verts)

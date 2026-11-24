@@ -3,6 +3,7 @@ import numpy as np
 import pytest
 from types import SimpleNamespace
 
+from kernel_parity_helpers import assert_bits
 from numhelpers import fd_gradient, rel_err
 from DropletRelaxer.wetting import (patch_solid_angle, sphere_wetting_energy_and_grad, compute_wetted_set,
                      wetted_boundary_loop)
@@ -48,6 +49,33 @@ def test_sphere_wetting_energy_value_and_gradient(rng):
     # the energy depends on directions only, so the force is tangential to the sphere
     radial = np.sum(g * (loop - c), axis=1) / np.linalg.norm(loop - c, axis=1)
     assert np.max(np.abs(radial)) < 1e-6 * np.max(np.linalg.norm(g, axis=1))
+
+
+@pytest.mark.parametrize("n,radius,center,kappa", [
+    (17, 1.0, (0.0, 0.0, 0.0), 0.5),
+    (24, 1.7, (-2.0, 0.5, 3.0), 0.6),
+    (52, 2.3, (0.3, -0.5, 1.1), -0.37),
+    (137, 100.0, (5.0, -3.0, 120.0), 0.5),
+])
+def test_sphere_wetting_kernels_match_bit_for_bit(n, radius, center, kappa, monkeypatch):
+    from DropletRelaxer import _fast
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+
+    phi = np.linspace(0.0, 2 * np.pi, n, endpoint=False)
+    theta = 0.6 + 0.07 * np.sin(3 * phi)  # noncircular: turning angles vary along the loop
+    center = np.asarray(center)
+    verts = center + radius * np.column_stack((np.sin(theta) * np.cos(phi),
+                                               np.sin(theta) * np.sin(phi), np.cos(theta)))
+    args = (verts, np.arange(n), center, radius, kappa)
+    monkeypatch.setattr(_fast, "_native_requested", False)
+    fast_energy, fast_grad = sphere_wetting_energy_and_grad(*args)
+    _fast.set_native_kernels(True)
+    native_energy, native_grad = sphere_wetting_energy_and_grad(*args)
+
+    assert_bits(fast_energy, native_energy)
+    assert_bits(fast_grad, native_grad)
 
 
 def test_sphere_wetting_energy_is_zero_for_90_degrees():

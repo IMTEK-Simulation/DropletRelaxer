@@ -19,18 +19,19 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from . import _fast
 from .analysis import (com_xy_offset_to_sphere, format_frame_table, sphere_gap, surface_free_energy,
                        wetted_loop_indices)
 from .config import apply_volume_scale
 from .energy import area_and_grad, center_of_mass, mean_curvature, volume_and_grad
 from .io.frame import Event, Frame, RunInfo, RunStatus, StopRequest, readonly
-from .mesh import (build_dof_mask, collapse_short_edges, long_edges_near, make_start_mesh, max_edge_length,
-                   mean_edge_length, refine_rivara, resolve_volume_scale, short_edge_fraction, short_edges_near,
-                   subdivide_mesh, tangential_smooth)
+from .mesh import (_make_start_mesh_with_topology, build_dof_mask, collapse_short_edges, long_edges_near,
+                   max_edge_length, mean_edge_length, refine_rivara, resolve_volume_scale, short_edge_fraction,
+                   short_edges_near, subdivide_mesh, tangential_smooth)
 from .quasistatic import QuasiStatic
 from .roughness import make_roughness_field
 from .solver import SolverDiverged, relax
-from .substrate import add_base_mesh, base_triangle_mask, strip_base
+from .substrate import _add_base_mesh_with_topology, base_triangle_mask, strip_base
 
 
 class Driver:
@@ -124,7 +125,7 @@ class Driver:
 
     def _run_until_remesh_or_done(self, verts, tris, boundary_idx, mask, start_iter, total_iters,
                                   V0, L0, check_split, check_collapse, epoch, quasi, t_start,
-                                  cc_block_until, diag):
+                                  cc_block_until, diag, *, topology=None):
         """Runs a single relax() generator from start_iter to total_iters,
         stopping EARLY only if a remesh trigger fires (checked every
         remesh_check_every iterations, past iteration 0): either the mesh
@@ -142,14 +143,18 @@ class Driver:
         cfg = self.cfg
         solver_gen = relax(verts, tris, boundary_idx, mask, cfg.solver, cfg.obstacle,
                            start_iter=start_iter, stop_iter=total_iters, V_target=V0, diag=diag,
-                           anomaly_cfg=cfg.anomaly, roughness=self.roughness_field, quasi=quasi)
+                           anomaly_cfg=cfg.anomaly, roughness=self.roughness_field, quasi=quasi,
+                           _topology=topology)
         if quasi is not None:
             quasi.energy_fn = lambda v_, A_, c_, w_: surface_free_energy(cfg, v_, tris, boundary_idx, A_, c_, w_,
                                                                           self.roughness_field)
         # The remesh triggers look at the free liquid/vapor surface (the dome)
         # only; the flat base on the substrate (substrate.py) is rebuilt from
         # the contact-line ring after every remesh and never triggers one.
-        tris_d = tris[~base_triangle_mask(verts, tris, boundary_idx)]
+        if topology is None:
+            tris_d, edges = tris[~base_triangle_mask(verts, tris, boundary_idx)], None
+        else:
+            tris_d, edges = topology.dome_tris, topology.dome_edges
         last = (start_iter, verts, None, None, None, None)
         local_split = cfg.mesh.remesh_split_mode == "local"
         contact_radius = 2.0 * cfg.obstacle.radius
@@ -165,12 +170,13 @@ class Driver:
                 remesh_kind = None
                 if i > 0 and i % cfg.mesh.remesh_check_every == 0:
                     if check_split and (
-                            max_edge_length(v, tris_d) / L0 > cfg.mesh.remesh_trigger_ratio
+                            max_edge_length(v, tris_d, edges=edges) / L0 > cfg.mesh.remesh_trigger_ratio
                             or (local_split and sphere_center is not None and long_edges_near(
                                 v, tris_d, sphere_center, contact_radius, 1.5 * contact_len))):
                         remesh_kind = "split"
                     elif check_collapse and short_edge_fraction(
-                            v, tris_d, cfg.mesh.remesh_min_edge_ratio * L0) > cfg.mesh.remesh_min_edge_fraction:
+                            v, tris_d, cfg.mesh.remesh_min_edge_ratio * L0, edges=edges
+                            ) > cfg.mesh.remesh_min_edge_fraction:
                         remesh_kind = "collapse"
                     elif (local_split and check_collapse and sphere_center is not None and i >= cc_block_until
                             and short_edges_near(v, tris_d, sphere_center, contact_radius,
@@ -233,10 +239,11 @@ class Driver:
             self._log(f"MeshConfig.target_volume={cfg.mesh.target_volume:.6g}: scaling the mesh "
                       f"(and volume_penalty/wetting_snap_distance/capture_radius to match) by {mesh_scale:.4g}.")
 
-        verts, tris, boundary_idx = make_start_mesh(cfg.mesh)
+        reuse_topology = not _fast.use_native_kernels()
+        verts, tris, boundary_idx, topology = _make_start_mesh_with_topology(cfg.mesh, reuse_topology=reuse_topology)
         mask = build_dof_mask(len(verts), boundary_idx)
 
-        base_tri0 = base_triangle_mask(verts, tris, boundary_idx)
+        base_tri0 = base_triangle_mask(verts, tris, boundary_idx) if topology is None else topology.base_tri
         # Liquid/vapor area only: with a closed mesh (base on the substrate,
         # see substrate.py) the base triangles are not part of it.
         A0 = float(area_and_grad(verts, tris)[2][~base_tri0].sum())
@@ -272,7 +279,10 @@ class Driver:
         # computed once, from the ORIGINAL mesh, so it doesn't shift as the
         # mesh itself gets refined or pruned. Dome edges only (the base does
         # not set the scale).
-        L0 = mean_edge_length(verts, tris[~base_tri0])
+        if topology is None:
+            L0 = mean_edge_length(verts, tris[~base_tri0])
+        else:
+            L0 = mean_edge_length(verts, topology.dome_tris, edges=topology.dome_edges)
 
         total_iters = cfg.solver.n_iterations
         use_quasi = cfg.quasi.enabled and cfg.obstacle.enabled
@@ -307,6 +317,7 @@ class Driver:
             start_iter = int(ck["iteration"])
             verts, tris, boundary_idx = (np.array(ck["verts"], dtype=float), np.array(ck["tris"], dtype=np.int64),
                                          np.array(ck["boundary_idx"], dtype=np.int64))
+            topology = _fast.MeshTopology(verts, tris, boundary_idx) if reuse_topology else None
             mask = build_dof_mask(len(verts), boundary_idx)
             self.epoch, self.split_count = int(sc["epoch"]), int(sc["split_count"])
             self.collapse_exhausted, self.cc_block_until = bool(sc["collapse_exhausted"]), int(sc["cc_block_until"])
@@ -342,6 +353,7 @@ class Driver:
             last, remesh_kind = self._run_until_remesh_or_done(
                 verts, tris, boundary_idx, mask, start_iter, total_iters,
                 V0, L0, check_split, check_collapse, epoch, quasi, t_start, self.cc_block_until, diag,
+                topology=topology,
             )
             start_iter, verts, _, _, _, _ = last
             # topology that belongs to `last` (a remesh below renumbers)
@@ -477,7 +489,11 @@ class Driver:
                 # see mesh.py:tangential_smooth.
                 verts = tangential_smooth(verts, tris, boundary_idx)
                 if cfg.mesh.base_mesh_enabled:
-                    verts, tris, boundary_idx = add_base_mesh(verts, tris, boundary_idx)
+                    verts, tris, boundary_idx, topology = _add_base_mesh_with_topology(
+                        verts, tris, boundary_idx, reuse_topology=reuse_topology
+                    )
+                else:
+                    topology = _fast.MeshTopology(verts, tris, boundary_idx) if reuse_topology else None
                 mask = build_dof_mask(len(verts), boundary_idx)
                 epoch += 1
                 self.epoch = epoch

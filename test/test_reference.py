@@ -35,6 +35,55 @@ def test_reference_run(name):
         assert out["sha256"] == ref["sha256"]
 
 
+def test_moving_sphere_backends_match_bit_for_bit(monkeypatch):
+    """Compare both backends on this build, not against a stored hash."""
+    from DropletRelaxer import _fast
+    from DropletRelaxer.config import Config
+    from DropletRelaxer.driver import Driver
+    from kernel_parity_helpers import assert_bits
+    from test_driver import Recorder
+
+    if not _fast.numba_available():
+        pytest.skip("requires Numba")
+
+    def run(native):
+        monkeypatch.setattr(_fast, "_native_requested", native)
+        cfg = Config()
+        reference_run.SCENARIOS["sphere"](cfg)
+        rec = Recorder()
+        result = Driver(cfg, sinks=[rec]).run()
+        assert rec.status.reason == "finished"
+        assert result["quasi_frames"] > 1
+        assert any(frame.wetted_loop is not None and np.any(frame.force) for frame in rec.frames)
+        end = rec.run.config.obstacle.center_end
+        assert not np.array_equal(rec.frames[0].sphere_center, end)
+        np.testing.assert_allclose(rec.frames[-1].sphere_center, end, rtol=0, atol=1e-12)
+        remeshes = [event for event in rec.events if event.kind == "remesh"]
+        assert len(remeshes) == result["remeshes"] > 0
+        return rec.frames, remeshes, result
+
+    def compare(actual, expected, label):
+        assert actual.keys() == expected.keys()
+        for key, value in actual.items():
+            want = expected[key]
+            try:
+                if value is None or want is None:
+                    assert value is want
+                else:
+                    assert_bits(value, want)
+            except AssertionError as err:
+                raise AssertionError(f"{label}: {key} differs ({err})") from err
+
+    native_frames, native_events, native_final = run(native=True)
+    fast_frames, fast_events, fast_final = run(native=False)
+    for fast, native in zip(fast_frames, native_frames, strict=True):
+        compare(vars(fast), vars(native), f"frame {native.index} at iteration {native.iteration}")
+    for fast, native in zip(fast_events, native_events, strict=True):
+        assert (fast.iteration, fast.message) == (native.iteration, native.message)
+        compare(fast.data, native.data, f"remesh at iteration {native.iteration}")
+    compare(fast_final, native_final, "final state")
+
+
 def test_quasistatic_restart_is_bit_identical(tmp_path):
     """The sphere scenario killed mid-run and restarted from its last
     checkpoint ends in exactly the state of the uninterrupted run (quasi-static
