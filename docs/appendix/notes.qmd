@@ -928,16 +928,18 @@ the contact line (costs time), to 120-300 only for quick previews.
 - **Window only at the end (`VisConfig.live_mode = "end_only"`, default `"live"`):** the run is computed without any window; the same frames are recorded (quasi-static: one per converged step), and when the run is finished the window opens with the full charts, the final shape and the history slider/Play/Save. With software OpenGL the live window costs about as much as the computation itself (6000 iterations: 126 s live vs. 62 s without window; on a GPU the difference is smaller). Needs `live=True` and a display; with `off_screen=True` it behaves like `live=False`. In this mode the terminal shows a one-line progress bar (fraction, iteration, elapsed time, ETA, number of remeshings) instead of the `[... collapse ...]` lines.
 - **Rendering cost:** the contact-line overlays used to trigger one extra full render each per displayed frame (pyvista `add_mesh` renders by default); they now use `render=False`. Measured with software OpenGL (no GPU): 887 -> 419 renders, live run 120 s -> 75 s. Further levers: `VisConfig.render_every` (50 instead of 10 -> 68 s in the same test), `window_size`, `save_video`/`video_max_frames`.
 - **Speed-ups of the computation (bit-identical results):** (1) `mesh.py:collapse_short_edges` no longer fills Python sets for every vertex/edge/triangle of the mesh; connectivity is built once as numpy CSR arrays and per-vertex sets are created lazily only for the few vertices a candidate edge touches (a pass takes ~0.6 s instead of ~3.5 s per 168 recorded calls in local mode, 0.6 s instead of 1.9 s per 47 calls in global mode; outputs identical on all 215 recorded real calls). (2) The undirected-edge lists (`wetting.unique_edges`, edge lengths, substrate base) use one integer key per edge instead of `np.unique(axis=0)` (3-4x faster, identical output). Whole default run (2500 iterations, old default path): 25 s -> 19-21 s with identical final area, volume and contact radius (9371.78373, 127728.97620, 32.75489) and the same 41 remeshes. Measured but NOT worth it (reverted): skipping the wetting computation (on the default path the sphere is in contact with a ~450-vertex patch in ~85 % of the iterations, so there is nothing to skip) and a sorted-key variant of the boundary-loop extraction (no gain).
-- **Numba (tested, not enabled):** the vectorized area and volume kernels are
-  ~9x faster as compiled loops (area+gradient 0.83 -> 0.09 ms, volume+gradient
-  0.60 -> 0.06 ms on a 4000-triangle mesh, results identical to 1e-15), but they
-  are only ~15 % of the run time: the whole default run went from ~25 s to
-  ~21-23 s (10-15 %), JIT compile ~1-1.5 s (cached after the first run). The
-  rest is Python-structure code (`collapse_short_edges` ~21 %, contact-loop
-  extraction ~7 %, SuperLU, sorting) that would need a larger rewrite;
-  a full Numba port might reach ~1.4-1.5x in total. Costs: a heavy dependency
-  (numba/llvmlite), cache files, slightly different round-off (and thus a
-  different chaotic remesh trajectory).
+- **Earlier Numba prototype (area and volume only; not shipped):** compiled
+  loops were ~9x faster (area+gradient 0.83 -> 0.09 ms, volume+gradient
+  0.60 -> 0.06 ms on a 4000-triangle mesh, results agreed to 1e-15), but those
+  kernels were only ~15 % of the run time. The whole default run went from
+  ~25 s to ~21-23 s (10-15 %), and the first JIT compilation took ~1-1.5 s
+  (cached after the first run). Other costs included `collapse_short_edges`
+  (~21 %), contact-loop extraction (~7 %), SuperLU and sorting. A broader port
+  was projected to reach ~1.4-1.5x overall; that was an estimate, not a
+  measurement. The prototype added Numba/llvmlite and cache files, and its
+  slightly different round-off could change the remesh trajectory. These
+  results describe the prototype, not the current optional backend
+  (@sec-optional-cpu-acceleration).
 
 ## Next steps (not yet implemented)
 

@@ -25,9 +25,15 @@ Python ≥ 3.12.
 git clone https://github.com/IMTEK-Simulation/DropletRelaxer.git
 cd DropletRelaxer
 python3 -m venv venv && source venv/bin/activate
-pip install -e .            # solver
+pip install -e .            # solver (NumPy/SciPy)
 pip install -e viewer       # viewer (desktop only)
 ```
+
+Optional: `pip install -e ".[fast]"` installs Numba CPU acceleration. The solver
+uses it automatically if a working Numba ≥ 0.63 is installed; otherwise it uses
+NumPy/SciPy. The first accelerated run compiles the kernels; later runs reuse
+Numba's cache. To force NumPy/SciPy, pass `--native-kernels` to `droplet-relax run`
+or `droplet-relax restart`, or set `DROPLET_NATIVE_KERNELS=1` (also works in live mode).
 
 With Anaconda/Miniconda, run `conda deactivate` before creating the venv (or
 use `/usr/bin/python3 -m venv venv`): a venv built on Conda's Python can make
@@ -71,6 +77,20 @@ pip install -e ".[test]" -e "viewer[test]"
 pytest              # fast tests (seconds)
 pytest -m slow      # real relaxations, reference runs (minutes)
 ```
+
+To run the headless suite with the optional backend and the slow moving-sphere
+parity test:
+
+```bash
+pip install -e ".[test,fast]"
+python -m pytest test
+python -m pytest test/test_reference.py::test_moving_sphere_backends_match_bit_for_bit
+```
+
+The parity tests compare both backends on the same dependency build rather
+than relying on a stored hash. CI runs the shorter parity tests in its Numba
+job and the full quasi-static comparison in the slow job (nightly, on demand,
+or with the `slow` pull-request label).
 
 ## Repository layout
 

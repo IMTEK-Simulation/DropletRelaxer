@@ -31,6 +31,8 @@ not on the sphere, so it adds no force on the sphere.
 import numpy as np
 from numpy.polynomial import Polynomial as _P
 
+from . import _fast
+
 
 def _profile(r, frac):
     """(rho0, h, S_poly) of the smooth disc indicator: transition from
@@ -61,6 +63,8 @@ def disc_integral_and_grad(verts, ring, center_xy, r, frac, n_gauss=None):
     """I = Integral over the polygon of the contact line (xy projection of
     `verts[ring]`, cyclic order) of the smooth disc indicator, and its
     gradient (n_verts x 3, only the xy components of ring vertices)."""
+    if verts.dtype == np.float64 and not _fast.use_native_kernels():
+        return _fast.disc_integral_fast(verts, ring, center_xy, r, frac, n_gauss)
     idx = np.asarray(ring, dtype=int)
     a = verts[idx, :2]
     b = np.roll(a, -1, axis=0)

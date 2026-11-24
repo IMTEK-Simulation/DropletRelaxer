@@ -37,6 +37,8 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.csgraph import connected_components
 
+from . import _fast
+
 
 def unique_edges(tris):
     """(E, 2) array of the mesh's undirected edges (sorted vertex pair
@@ -44,6 +46,10 @@ def unique_edges(tris):
     and pass it to compute_wetted_set. One integer key per edge instead of
     np.unique(axis=0) (same result, several times faster)."""
     tris = np.asarray(tris)
+    # Keep the native empty-input error in this public helper.
+    if tris.size and not _fast.use_native_kernels():
+        edges = _fast.numba_kernels().unique_edges_kernel(np.ascontiguousarray(tris, dtype=np.int64))
+        return edges.astype(tris.dtype, copy=False)
     e = np.sort(np.vstack([tris[:, [0, 1]], tris[:, [1, 2]], tris[:, [2, 0]]]), axis=1)
     n = int(e.max()) + 1
     key = np.unique(e[:, 0].astype(np.int64) * n + e[:, 1])
@@ -57,6 +63,16 @@ def compute_wetted_set(verts, tris, center, radius, snap_distance, edges=None):
     largest connected component (via mesh edges). One component only,
     because the boundary-loop extraction below assumes one simple
     loop."""
+    # With no triangles or supplied edges, preserve the native order:
+    # check proximity first and only raise on edge extraction if needed.
+    if verts.dtype == np.float64 and not _fast.use_native_kernels() and (edges is not None or len(tris)):
+        if edges is None:
+            edges = unique_edges(tris)
+        return _fast.numba_kernels().compute_wetted_set_kernel(
+            np.ascontiguousarray(verts, dtype=np.float64),
+            np.ascontiguousarray(center, dtype=np.float64),
+            float(radius), float(snap_distance), np.ascontiguousarray(edges, dtype=np.int64),
+        )
     gap = np.linalg.norm(verts - center, axis=1) - radius
     near = np.abs(gap) < snap_distance
     if not near.any():
@@ -84,6 +100,14 @@ def wetted_boundary_loop(wetted_mask, tris, verts, center):
     A triangle counts as inside the patch only when all 3 vertices are
     wetted; the loop is the set of edges that belong to exactly one
     inside triangle."""
+    if verts.dtype == np.float64 and not _fast.use_native_kernels():
+        loop = _fast.wetted_boundary_loop_fast(
+            np.ascontiguousarray(wetted_mask, dtype=np.bool_),
+            np.ascontiguousarray(tris, dtype=np.int64),
+            np.ascontiguousarray(verts, dtype=np.float64),
+            np.ascontiguousarray(center, dtype=np.float64),
+        )
+        return loop if len(loop) > 0 else None
     inside = wetted_mask[tris].all(axis=1)
     if not inside.any():
         return None
@@ -112,7 +136,10 @@ def wetted_boundary_loop(wetted_mask, tris, verts, center):
     if len(loop) != len(succ):
         return None  # several disjoint loops
 
-    loop = np.array(loop)
+    return _orient_wetted_loop(np.array(loop), verts, center)
+
+
+def _orient_wetted_loop(loop, verts, center):
     u = verts[loop] - center
     u /= np.linalg.norm(u, axis=1, keepdims=True)
     c = u.mean(axis=0)
@@ -127,6 +154,11 @@ def _turning_angles(u):
     """Signed turning angle at every vertex of a closed loop of unit
     vectors: the angle between incoming and outgoing edge, both
     projected into the tangent plane at that vertex."""
+    if not _fast.use_native_kernels() and u.dtype == np.float64:
+        # Keep NumPy's arctan2 in both paths: Numba's scalar implementation
+        # can round differently, which matters when subtracting nearby angles.
+        y, x = _fast.numba_kernels().turning_angle_components_kernel(np.ascontiguousarray(u))
+        return np.arctan2(y, x)
     v_prev, v_next = np.roll(u, 1, axis=0), np.roll(u, -1, axis=0)
     t_in = (u - v_prev)
     t_in = t_in - np.sum(t_in * u, axis=1, keepdims=True) * u
@@ -183,6 +215,8 @@ def sphere_wetting_energy_and_grad(verts, loop_idx, center, radius, kappa_sphere
     idx = np.asarray(loop_idx)
     n = len(idx)
     raw = verts[idx] - center
+    if not _fast.use_native_kernels() and n >= 3 and raw.dtype == verts.dtype == np.float64:
+        return _fast.sphere_wetting_energy_and_grad(raw, idx, len(verts), radius, kappa_sphere)
     u = raw / np.linalg.norm(raw, axis=1, keepdims=True)
     A_patch = radius ** 2 * patch_solid_angle(u)
     E = -kappa_sphere * A_patch

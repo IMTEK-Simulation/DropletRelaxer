@@ -16,6 +16,7 @@ import signal
 import sys
 
 from . import __version__
+from . import _fast
 from .config import ConfigError, dumps, load, loads
 from .console import ConsoleSink
 from .driver import Driver
@@ -102,12 +103,16 @@ def build_parser():
     r.add_argument("-o", "--output", help="run file to write (HDF5, VTKHDF layout)")
     r.add_argument("--force", action="store_true", help="overwrite an existing output file")
     r.add_argument("-q", "--quiet", action="store_true", help="no progress bar")
+    r.add_argument("--native-kernels", action="store_true",
+                   help="use native NumPy/SciPy kernels instead of fast Numba kernels")
     add_set(r)
     r.set_defaults(func=cmd_run)
 
     rs = sub.add_parser("restart", help="continue a run from the checkpoint in its file")
     rs.add_argument("run", help="run file written by `droplet-relax run`")
     rs.add_argument("-q", "--quiet", action="store_true", help="no progress bar")
+    rs.add_argument("--native-kernels", action="store_true",
+                    help="use native NumPy/SciPy kernels instead of fast Numba kernels")
     rs.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
                     help="only solver.n_iterations and output.* may change at a restart")
     rs.set_defaults(func=cmd_restart)
@@ -126,11 +131,12 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    try:
-        return args.func(args)
-    except ConfigError as err:
-        print(f"droplet-relax: configuration error: {err}", file=sys.stderr)
-        return 2
+    with _fast.kernel_mode(native=getattr(args, "native_kernels", False)):
+        try:
+            return args.func(args)
+        except ConfigError as err:
+            print(f"droplet-relax: configuration error: {err}", file=sys.stderr)
+            return 2
 
 
 if __name__ == "__main__":

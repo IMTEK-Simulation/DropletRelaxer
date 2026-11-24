@@ -11,6 +11,7 @@ import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg as spla
 
+from . import _fast
 from .energy import (
     area_and_grad, volume_and_grad, build_laplacian, row_norm,
     substrate_wall_energy_and_grad, substrate_penetration_energy_and_grad,
@@ -39,7 +40,8 @@ class SolverDiverged(RuntimeError):
 
 
 def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
-          start_iter=0, stop_iter=None, V_target=None, diag=None, anomaly_cfg=None, roughness=None, quasi=None):
+          start_iter=0, stop_iter=None, V_target=None, diag=None, anomaly_cfg=None, roughness=None, quasi=None,
+          *, _topology=None):
     """Generator: yields (iteration, verts, area, volume, sphere_center,
     wetted_loop) for iterations start_iter+1 .. stop_iter (stop_iter
     defaults to solver_cfg.n_iterations, i.e. run to the end).
@@ -70,6 +72,15 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
     force the liquid exerts on the sphere (3-vector, same units as the energy
     gradient), see the "force on the sphere" comment in the loop."""
 
+    if verts0.dtype != np.float64 and not _fast.use_native_kernels():
+        # Keep NumPy promotion rules, including the out-of-place position update.
+        yield from _fast.native_iterations(relax(
+            verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg, start_iter, stop_iter,
+            V_target, diag, anomaly_cfg, roughness, quasi,
+        ))
+        return
+
+    native = _fast.use_native_kernels()
     n_verts = verts0.shape[0]
     V0 = V_target if V_target is not None else volume_and_grad(verts0, tris)[0]
     stop_iter = solver_cfg.n_iterations if stop_iter is None else stop_iter
@@ -81,12 +92,24 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
     # (Sobolev smoothing, trust region, smoothing, wetted-patch
     # bookkeeping) is built from the dome triangles only, exactly as for
     # the open mesh.
-    base_tri = base_triangle_mask(verts0, tris, boundary_idx)
-    has_base = bool(base_tri.any())
-    dome_tris = tris[~base_tri] if has_base else tris
+    if native:
+        _topology = None
+    if _topology is None:
+        base_tri = base_triangle_mask(verts0, tris, boundary_idx)
+        has_base = bool(base_tri.any())
+        dome_tris = tris[~base_tri] if has_base else tris
+    else:
+        if _topology.tris is not tris or _topology.boundary_idx is not boundary_idx or _topology.n_verts != n_verts:
+            raise ValueError("solver topology belongs to a different mesh")
+        base_tri, dome_tris = _topology.base_tri, _topology.dome_tris
+        has_base = bool(base_tri.any())
     gamma = getattr(solver_cfg, "gamma_lv", 1.0)
 
-    L = build_laplacian(n_verts, dome_tris)
+    if native:
+        L = build_laplacian(n_verts, dome_tris)
+    else:
+        edges = unique_edges(dome_tris) if _topology is None else _topology.dome_edges
+        L = _fast.laplacian_fast(n_verts, edges)
     M = (sp.identity(n_verts, format="csr") + solver_cfg.sobolev_alpha * L).tocsc()
     solve = spla.factorized(M)
 
@@ -97,7 +120,8 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
                     if use_wetting else 0.0)
     n_iters = max(solver_cfg.n_iterations, 1)
 
-    edges = unique_edges(dome_tris)
+    if native:
+        edges = unique_edges(dome_tris)
     e0, e1 = edges[:, 0], edges[:, 1]
     # Neighbor averaging operator (used to keep the interior of a wetted
     # patch, which has no surface energy of its own, from degenerating).
@@ -108,16 +132,17 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
     smooth_every = getattr(solver_cfg, "tangential_smoothing_every", 0)
     smooth_strength = getattr(solver_cfg, "tangential_smoothing_strength", 0.3)
     adj_bin = (adj > 0).astype(float)
-    # Fixed mesh topology for the whole relax() call -> precompute, once,
-    # the grouping of edges by endpoint so the trust region's "shortest
-    # incident edge per vertex" is a single reduceat instead of two
-    # (slow) np.minimum.at scatter calls every iteration.
-    _ends = np.concatenate([e0, e1])
-    _eid = np.concatenate([np.arange(len(e0)), np.arange(len(e0))])
-    _order = np.argsort(_ends, kind="stable")
-    _ends_sorted, _eid_sorted = _ends[_order], _eid[_order]
-    _starts = np.flatnonzero(np.r_[True, _ends_sorted[1:] != _ends_sorted[:-1]])
-    _verts_with_edges = _ends_sorted[_starts]
+    if native:
+        # Fixed mesh topology for the whole relax() call -> precompute, once,
+        # the grouping of edges by endpoint so the trust region's "shortest
+        # incident edge per vertex" is a single reduceat instead of two
+        # (slow) np.minimum.at scatter calls every iteration.
+        _ends = np.concatenate([e0, e1])
+        _eid = np.concatenate([np.arange(len(e0)), np.arange(len(e0))])
+        _order = np.argsort(_ends, kind="stable")
+        _ends_sorted, _eid_sorted = _ends[_order], _eid[_order]
+        _starts = np.flatnonzero(np.r_[True, _ends_sorted[1:] != _ends_sorted[:-1]])
+        _verts_with_edges = _ends_sorted[_starts]
     fixed_ring = np.zeros(n_verts, dtype=bool)
     fixed_ring[np.asarray(boundary_idx, dtype=int)] = True
 
@@ -129,7 +154,7 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
     tri_w0 = np.where(base_tri, -gamma * kappa, gamma)
     lv_mask = ~base_tri  # triangles that belong to the liquid/vapor surface
     if has_base:
-        embedder = BaseEmbedder(tris, boundary_idx, base_tri, n_verts)
+        embedder = BaseEmbedder(tris, boundary_idx, base_tri, n_verts) if _topology is None else _topology.embedder
         base_vert = np.zeros(n_verts, dtype=bool)
         base_vert[np.unique(tris[base_tri])] = True  # base interior + ring
         base_int = np.zeros(n_verts, dtype=bool)
@@ -137,6 +162,12 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
         fixed_static = fixed_ring | base_int
     else:
         fixed_static = fixed_ring
+
+    # Only the inner numerical operations differ; both modes use the same loop.
+    fast = None
+    if not native:
+        fast = _fast.RelaxKernels(tris, edges, adj, deg, boundary_idx, embedder.interior if has_base else (),
+                                  solver_cfg.learning_rate, max_step_frac)
 
     verts = verts0.copy()
     if has_base:
@@ -163,7 +194,11 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
         if use_wetting:
             wet = compute_wetted_set(verts, tris, sphere_center, obstacle_cfg.radius,
                                      obstacle_cfg.wetting_snap_distance, edges)
-            if wet.sum() >= obstacle_cfg.wetting_min_patch_vertices:
+            if fast is not None:
+                tri_w, wetted_loop = fast.wetted_patch(
+                    verts, wet, sphere_center, obstacle_cfg.wetting_min_patch_vertices
+                )
+            elif wet.sum() >= obstacle_cfg.wetting_min_patch_vertices:
                 inside = wet[tris].all(axis=1)
                 if inside.any():
                     tri_w = np.where(inside, 0.0, 1.0)
@@ -192,7 +227,10 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
         _, gA, tri_area = area_and_grad(verts, tris, w, base_tri if has_base else None)
         # `A` = geometric liquid/vapor area (dome, wetted sphere patch
         # excluded); the energy is gamma_lv * A (+ the wetting terms).
-        A = float(np.sum(tri_area * (lv_mask if tri_w is None else lv_mask * tri_w)))
+        if fast is not None:
+            A = fast.liquid_vapor_area(tri_area, lv_mask, tri_w)
+        else:
+            A = float(np.sum(tri_area * (lv_mask if tri_w is None else lv_mask * tri_w)))
         V, gV = volume_and_grad(verts, tris)
         terms = {"area": np.abs(gA).max()}
 
@@ -271,16 +309,19 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
             # sphere's reaction force (the constraint); only the
             # tangential part moves it. Removing it here keeps the
             # Sobolev smoothing from spreading it onto free neighbors.
-            d = verts[wet] - sphere_center
-            nrm = d / np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-12)
-            rad = np.sum(gE[wet] * nrm, axis=1, keepdims=True) * nrm
-            # Force on the sphere: the radial part of the energy gradient on a
-            # wetted vertex is carried by the sphere (constraint reaction on
-            # the vertex = +rad, so the liquid pushes on the sphere with
-            # -rad). It contains the pressure on the wetted patch and the
-            # radial pull of the free surface at the contact line.
-            F_sphere -= rad.sum(axis=0)
-            gE[wet] -= rad
+            if fast is None:
+                d = verts[wet] - sphere_center
+                nrm = d / np.maximum(np.linalg.norm(d, axis=1, keepdims=True), 1e-12)
+                rad = np.sum(gE[wet] * nrm, axis=1, keepdims=True) * nrm
+                # Force on the sphere: the radial part of the energy gradient on a
+                # wetted vertex is carried by the sphere (constraint reaction on
+                # the vertex = +rad, so the liquid pushes on the sphere with
+                # -rad). It contains the pressure on the wetted patch and the
+                # radial pull of the free surface at the contact line.
+                F_sphere -= rad.sum(axis=0)
+                gE[wet] -= rad
+            else:
+                _fast.project_wetted_gradient(verts, gE, wet, sphere_center, F_sphere)
 
         gE[boundary_idx, 2] = 0.0  # contact line stays on the substrate
         if has_base:
@@ -300,25 +341,30 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
 
         # Sobolev smoothing: (I + alpha*L)^-1 * gradient, componentwise
         g_smooth = solve(np.ascontiguousarray(gE))  # one call for all 3 columns
-        g_smooth[boundary_idx, 2] = 0.0
-        if has_base:
-            g_smooth[base_int] = 0.0  # base interior is placed by the ring, not by forces
 
-        step = solver_cfg.learning_rate * g_smooth
-        if max_step_frac > 0:
-            # Trust region: cap each vertex's move at a fraction of its
-            # own shortest incident edge (see SolverConfig.max_step_fraction).
-            el = row_norm(verts[e0] - verts[e1])
-            shortest = np.full(n_verts, np.inf)
-            shortest[_verts_with_edges] = np.minimum.reduceat(el[_eid_sorted], _starts)
-            floor = 0.25 * np.median(el)  # a degenerate edge must not freeze its vertex
-            cap = max_step_frac * np.maximum(shortest, floor)
-            size = row_norm(step)
-            step *= np.minimum(1.0, cap / np.maximum(size, 1e-300))[:, None]
-        step_max = float(row_norm(step).max())
+        if fast is None:
+            g_smooth[boundary_idx, 2] = 0.0
+            if has_base:
+                g_smooth[base_int] = 0.0  # base interior is placed by the ring, not by forces
 
-        verts = verts - step
-        verts[boundary_idx, 2] = 0.0  # correct numerical drift
+            step = solver_cfg.learning_rate * g_smooth
+            if max_step_frac > 0:
+                # Trust region: cap each vertex's move at a fraction of its
+                # own shortest incident edge (see SolverConfig.max_step_fraction).
+                el = row_norm(verts[e0] - verts[e1])
+                shortest = np.full(n_verts, np.inf)
+                shortest[_verts_with_edges] = np.minimum.reduceat(el[_eid_sorted], _starts)
+                floor = 0.25 * np.median(el)  # a degenerate edge must not freeze its vertex
+                cap = max_step_frac * np.maximum(shortest, floor)
+                size = row_norm(step)
+                step *= np.minimum(1.0, cap / np.maximum(size, 1e-300))[:, None]
+            step_max = float(row_norm(step).max())
+
+            verts = verts - step
+            verts[boundary_idx, 2] = 0.0  # correct numerical drift
+
+        else:
+            step_max = fast.take_step(verts, g_smooth)
 
         if smooth_every > 0 and i % smooth_every == 0:
             # Mesh regularization: the area flow only defines the
@@ -340,18 +386,29 @@ def relax(verts0, tris, boundary_idx, mask, solver_cfg, obstacle_cfg=None,
             # slides: relax them toward their neighbors' centroid (a
             # mesh-quality step, not physics), then put every wetted
             # vertex exactly onto the sphere.
-            interior = wet & (np.asarray(adj @ wet.astype(float)) >= deg - 0.5)
-            if interior.any():
-                centroid = (adj @ verts) / np.maximum(deg, 1)[:, None]
-                verts[interior] = 0.5 * verts[interior] + 0.5 * centroid[interior]
-            d = verts[wet] - sphere_center
-            verts[wet] = sphere_center + obstacle_cfg.radius * d / np.maximum(
-                np.linalg.norm(d, axis=1, keepdims=True), 1e-12)
+            if fast is None:
+                interior = wet & (np.asarray(adj @ wet.astype(float)) >= deg - 0.5)
+                if interior.any():
+                    centroid = (adj @ verts) / np.maximum(deg, 1)[:, None]
+                    verts[interior] = 0.5 * verts[interior] + 0.5 * centroid[interior]
+                d = verts[wet] - sphere_center
+                verts[wet] = sphere_center + obstacle_cfg.radius * d / np.maximum(
+                    np.linalg.norm(d, axis=1, keepdims=True), 1e-12)
+            else:
+                fast.smooth_and_snap(verts, wet, sphere_center, obstacle_cfg.radius)
 
-        if not np.all(np.isfinite(verts)):
-            raise SolverDiverged(i, "non-finite coordinates", terms)
-        if np.abs(verts).max() > 1e3:
-            raise SolverDiverged(i, f"coordinates exploded (|x|max={np.abs(verts).max():.3g})", terms)
+        if fast is None:
+            if not np.all(np.isfinite(verts)):
+                raise SolverDiverged(i, "non-finite coordinates", terms)
+            if np.abs(verts).max() > 1e3:
+                raise SolverDiverged(i, f"coordinates exploded (|x|max={np.abs(verts).max():.3g})", terms)
+
+        else:
+            finite, max_coord = _fast.numba_kernels().check_verts_bounds_kernel(verts)
+            if not finite or max_coord > 1e3:
+                if not finite:
+                    raise SolverDiverged(i, "non-finite coordinates", terms)
+                raise SolverDiverged(i, f"coordinates exploded (|x|max={max_coord:.3g})", terms)
 
         if quasi is not None:
             status = quasi.observe(verts, F_sphere, step_max, False, A, sphere_center, wetted_loop)

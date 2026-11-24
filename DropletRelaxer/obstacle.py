@@ -28,6 +28,8 @@ but it cannot pinch off into a separate liquid bridge.
 
 import numpy as np
 
+from . import _fast
+
 
 def path_length(obstacle_cfg):
     """Length of the straight sphere path center_start -> center_end."""
@@ -62,6 +64,8 @@ def sphere_contact_energy_and_grad(verts, center, radius, stiffness, adhesion, c
     gradient is +-2*k*gap in the radial direction -- continuous at
     gap=0 (where both are zero), so the combined force has no
     discontinuity right at the sphere surface."""
+    if getattr(verts, "dtype", None) == np.float64 and not _fast.use_native_kernels():
+        return _fast.sphere_contact_fast(verts, center, radius, stiffness, adhesion, capture_radius)
     d = verts - center
     dist = np.linalg.norm(d, axis=1)
     n_hat = d / np.maximum(dist, 1e-12)[:, None]
